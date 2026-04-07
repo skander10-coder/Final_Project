@@ -7,7 +7,7 @@ export default function Sidebar({ navItems = [], sections = [] }) {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // التحقق من المصادقة عند تحميل الصفحة
+  
   useEffect(() => {
     checkAuth();
   }, []);
@@ -29,8 +29,8 @@ export default function Sidebar({ navItems = [], sections = [] }) {
       setIsAuthenticated(false);
       setShowLogoutConfirm(false);
 
-      // Force full page reload and redirect to login
-      window.location.href = '/login';
+      // Replace history so protected pages can't be revisited via back button.
+      navigate('/login', { replace: true });
 
     } catch (error) {
       console.error('Logout error:', error);

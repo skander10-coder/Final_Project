@@ -8,6 +8,27 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <title>Stag.io - Internship Management</title>
+    
+    <script>
+      
+      (function() {
+        const protectedPaths = ['/student', '/company', '/admin', '/profile', '/settings', '/notifications'];
+        const currentPath = window.location.pathname;
+        const isProtected = protectedPaths.some(path => currentPath.startsWith(path));
+        
+        if (isProtected && !localStorage.getItem('user')) {
+          window.location.replace('/login');
+          return;
+        }
+        
+        if (isProtected) {
+          history.pushState(null, null, location.href);
+          window.onpopstate = function() {
+            history.go(1);
+          };
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

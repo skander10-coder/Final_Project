@@ -15,22 +15,19 @@ export default function Login() {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState(message || '');
 
-  // Prevent going back to protected pages after logout
+  // If someone is already logged in, never show the login page.
+  // This prevents the "back button lands on /login" issue from breaking the UX.
   useEffect(() => {
-    // Clear history and prevent back navigation
-    window.history.pushState(null, '', window.location.href);
-    
-    const handlePopState = () => {
-      // If user tries to go back, redirect to login
-      window.location.href = '/login';
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-    };
-  }, []);
+    const rawUser = localStorage.getItem('user');
+    if (!rawUser) return;
+    try {
+      const user = JSON.parse(rawUser);
+      if (!user?.role) return;
+      navigate(`/${user.role}`, { replace: true });
+    } catch {
+      // Ignore corrupted storage and let the normal login flow handle it.
+    }
+  }, [navigate]);
 
   const handleChange = (e) => {
     setFormData({
@@ -51,20 +48,20 @@ export default function Login() {
       if (response.data.success) {
         // Save user to localStorage
         localStorage.setItem('user', JSON.stringify(response.data.user));
-        
-        // Force full page reload and redirect based on role
-        switch(response.data.user.role) {
+
+        // Redirect based on role, replacing history so back doesn't re-open /login.
+        switch (response.data.user.role) {
           case 'student':
-            window.location.href = '/student';
+            navigate('/student', { replace: true });
             break;
           case 'company':
-            window.location.href = '/company';
+            navigate('/company', { replace: true });
             break;
           case 'admin':
-            window.location.href = '/admin';
+            navigate('/admin', { replace: true });
             break;
           default:
-            window.location.href = '/';
+            navigate('/', { replace: true });
         }
       }
     } catch (error) {
