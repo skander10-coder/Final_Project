@@ -6,7 +6,7 @@ import Register from './pages/Register';
 import StudentLayout from './layouts/StudentLayout';
 import CompanyLayout from './layouts/CompanyLayout';
 import AdminLayout from './layouts/AdminLayout';
-import { StudentDashboardHome, StudentPlaceholder } from './pages/StudentDashboard';
+import { StudentDashboardHome, StudentApplicationsPage, StudentInternshipsPage, StudentPlaceholder } from './pages/StudentDashboard';
 import { CompanyDashboardHome, CompanyPlaceholder } from './pages/CompanyDashboard';
 import { AdminDashboardHome, AdminCompaniesPage, AdminStudentsPage } from './pages/AdminDashboard';
 import Candidates from './pages/Candidates';
@@ -37,8 +37,8 @@ function App() {
           }>
             <Route index element={<StudentDashboardHome />} />
             <Route path="fill-cv" element={<FillCV />} />
-            <Route path="applications" element={<StudentPlaceholder title="Applications" />} />
-            <Route path="internships" element={<StudentPlaceholder title="Internships" />} />
+            <Route path="applications" element={<StudentApplicationsPage />} />
+            <Route path="internships" element={<StudentInternshipsPage />} />
           </Route>
 
           {/* Company Dashboard */}

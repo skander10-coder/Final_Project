@@ -1,8 +1,9 @@
-from stage import app, db, bcrypt
+from stage import app, db, bcrypt , GEMINI_API_KEY
 from flask import request, jsonify , send_file , send_from_directory
 from flask_login import login_user, logout_user, login_required, current_user
 from stage.models import User , InternshipOffer , Application , StudentProfile , CompanyProfile , AdminProfile , Notification , InternshipAgreement
 from sqlalchemy import Unicode, cast
+import google.generativeai as genai
 
 
 
@@ -220,11 +221,30 @@ def update_internship(offer_id):
 
 @app.route("/api/student/internships", methods=["GET"])
 def get_student_internships():
+    from stage.models import InternshipOffer, StudentProfile
     
+    # Get student profile
+    student_skills = []
+    student_bio = ''
+    if current_user.is_authenticated and current_user.role == 'student':
+        profile = StudentProfile.query.filter_by(user_id=current_user.id).first()
+        if profile:
+            student_skills = profile.skills or []
+            student_bio = profile.bio or ''
+    
+    # Get approved offers
     offers = InternshipOffer.query.filter_by(is_active=True, is_approved=True).order_by(InternshipOffer.created_at.desc()).all()
     
     offers_list = []
     for offer in offers:
+        # Calculate match score using Gemini
+        match_score = calculate_match_with_gemini(
+            student_skills, 
+            offer.required_skills or [],
+            student_bio,
+            offer.description
+        )
+        
         offers_list.append({
             'id': offer.id,
             'title': offer.title,
@@ -233,15 +253,18 @@ def get_student_internships():
             'location': offer.location,
             'duration': offer.duration,
             'company_name': offer.company.company_name if offer.company else 'Unknown',
-            'created_at': offer.created_at.isoformat()
+            'created_at': offer.created_at.isoformat(),
+            'match_score': match_score
         })
+    
+    # Sort by match score (highest first) for students
+    if current_user.is_authenticated and current_user.role == 'student':
+        offers_list.sort(key=lambda x: x['match_score'], reverse=True)
     
     return jsonify({
         'success': True,
         'offers': offers_list
     })
-
-
 
 
     
@@ -295,19 +318,59 @@ def apply_for_internship(offer_id):
 # Company: Get applications for company's offers
 @app.route("/api/company/applications", methods=["GET"])
 def get_company_applications():
-    from stage.models import InternshipOffer, Application
+    from stage.models import InternshipOffer, Application, StudentProfile
     
     if not current_user.is_authenticated or current_user.role != 'company':
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
     
+    # Get all offers for this company
     offers = InternshipOffer.query.filter_by(company_id=current_user.id).all()
     offer_ids = [offer.id for offer in offers]
     
+    # Get all applications for these offers
     applications = Application.query.filter(Application.offer_id.in_(offer_ids)).order_by(Application.applied_at.desc()).all()
+    
+    applications_list = []
+    for app in applications:
+        offer = InternshipOffer.query.get(app.offer_id)
+        student = User.query.get(app.student_id)
+        
+        # Get student profile
+        student_skills = []
+        student_bio = ''
+        profile = StudentProfile.query.filter_by(user_id=student.id).first()
+        if profile:
+            student_skills = profile.skills or []
+            student_bio = profile.bio or ''
+        
+        # Calculate match score using Gemini
+        match_score = calculate_match_with_gemini(
+            student_skills,
+            offer.required_skills or [],
+            student_bio,
+            offer.description
+        )
+        
+        applications_list.append({
+            'id': app.id,
+            'offer_id': app.offer_id,
+            'offer_title': offer.title if offer else None,
+            'offer_company': offer.company.company_name if offer and offer.company else None,
+            'student_id': student.id,
+            'student_name': student.full_name or student.email,
+            'student_skills': student_skills,
+            'student_bio': student_bio,
+            'status': app.status,
+            'applied_at': app.applied_at.isoformat(),
+            'match_score': match_score
+        })
+    
+    # Sort by match score (highest first)
+    applications_list.sort(key=lambda x: x['match_score'], reverse=True)
     
     return jsonify({
         'success': True,
-        'applications': [app.to_dict() for app in applications]
+        'applications': applications_list
     })
 
 
@@ -1148,3 +1211,61 @@ def get_all_companies():
         'success': True,
         'companies': companies_list
     })
+    
+    
+    
+
+# Configure Gemini
+genai.configure(api_key=GEMINI_API_KEY)
+
+def calculate_match_with_gemini(student_skills, required_skills, student_bio='', offer_description=''):
+    """
+    Calculate match percentage using Gemini AI.
+    Returns integer 0-100.
+    """
+    if not student_skills or not required_skills:
+        return 0
+    
+    
+    prompt = f"""
+    You are an internship matching expert. Calculate how well this student matches the internship requirements.
+
+    Student Skills: {', '.join(student_skills)}
+    Student Bio: {student_bio[:200] if student_bio else 'Not provided'}
+
+    Internship Required Skills: {', '.join(required_skills)}
+    Internship Description: {offer_description[:200] if offer_description else 'Not provided'}
+
+    Consider:
+    1. Exact skill matches (high weight)
+    2. Related skills (medium weight) - e.g., "React" matches "React.js", "JavaScript"
+    3. Experience level implied by bio (low weight)
+
+    Return ONLY a number between 0 and 100 representing the match percentage.
+    Do not include any explanation or other text.
+    """
+
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(prompt)
+        score = int(response.text.strip())
+        return min(100, max(0, score))  # Clamp between 0-100
+    except Exception as e:
+        print(f"Gemini API error: {e}")
+        # Fallback to simple matching
+        return calculate_match_simple(student_skills, required_skills)
+
+
+def calculate_match_simple(student_skills, required_skills):
+    """Fallback simple matching function"""
+    if not student_skills or not required_skills:
+        return 0
+    
+    student_set = set(skill.lower().strip() for skill in student_skills if skill)
+    required_set = set(skill.lower().strip() for skill in required_skills if skill)
+    
+    if not required_set:
+        return 0
+    
+    matched = len(student_set.intersection(required_set))
+    return int((matched / len(required_set)) * 100)
