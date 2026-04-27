@@ -1,24 +1,20 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useOutletContext, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import CircularProgress from '../components/ui/CircularProgress';
 import api, { studentAPI } from '../services/api';
 
 export function StudentDashboardHome() {
-  const { searchTerm } = useOutletContext();
   const navigate = useNavigate();
-  
   const [internships, setInternships] = useState([]);
   const [loading, setLoading] = useState(true);
   const [applications, setApplications] = useState([]);
   const [loadingApps, setLoadingApps] = useState(true);
-  const [locationFilter, setLocationFilter] = useState('');
   const [hasCV, setHasCV] = useState(false);
   const [checkingCV, setCheckingCV] = useState(true);
-  
-  const internshipsSectionRef = useRef(null);
+  const [student, setStudent] = useState(null);
+  const [cvCompletion, setCvCompletion] = useState(0);
 
-  // جلب العروض عند تحميل الصفحة
   useEffect(() => {
     fetchInternships();
     fetchApplications();
@@ -30,7 +26,7 @@ export function StudentDashboardHome() {
     try {
       const response = await studentAPI.getInternships();
       if (response.data.success) {
-        setInternships(response.data.offers);
+        setInternships(response.data.offers || []);
       }
     } catch (error) {
       console.error('Error fetching internships:', error);
@@ -39,13 +35,12 @@ export function StudentDashboardHome() {
     }
   };
 
-  // جلب طلبات الطالب
   const fetchApplications = async () => {
     setLoadingApps(true);
     try {
       const response = await studentAPI.getApplications();
       if (response.data.success) {
-        setApplications(response.data.applications);
+        setApplications(response.data.applications || []);
       }
     } catch (error) {
       console.error('Error fetching applications:', error);
@@ -54,14 +49,22 @@ export function StudentDashboardHome() {
     }
   };
 
-  // 🔥 التحقق من اكتمال الـ CV
   const checkCV = async () => {
     try {
       const res = await studentAPI.getProfile();
       if (res.data.success) {
         const profile = res.data.profile;
+        setStudent(profile || null);
         const completed = profile && profile.skills?.length > 0 && profile.university && profile.level && profile.major;
-        setHasCV(completed);
+        setHasCV(Boolean(completed));
+        const completionChecks = [
+          Boolean(profile?.skills?.length),
+          Boolean(profile?.university),
+          Boolean(profile?.level),
+          Boolean(profile?.major),
+        ];
+        const completion = Math.round((completionChecks.filter(Boolean).length / completionChecks.length) * 100);
+        setCvCompletion(completion);
       }
     } catch (err) {
       console.error('Error checking CV:', err);
@@ -70,148 +73,169 @@ export function StudentDashboardHome() {
     }
   };
 
-  // البحث في Frontend (في العنوان والمهارات)
-  const filteredInternships = useMemo(() => {
-    let results = internships;
-    
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      results = results.filter(internship => {
-        const titleMatch = internship.title?.toLowerCase().includes(term);
-        const skillsMatch = internship.required_skills?.some(skill => 
-          skill.toLowerCase().includes(term)
-        );
-        return titleMatch || skillsMatch;
-      });
-    }
-    
-    if (locationFilter) {
-      results = results.filter(internship => internship.location === locationFilter);
-    }
-    
-    return results;
-  }, [internships, searchTerm, locationFilter]);
+  const pendingCount = applications.filter((a) => a.status === 'pending').length;
+  const acceptedOrInterviewCount = applications.filter(
+    (a) => a.status === 'accepted' || a.status === 'validated'
+  ).length;
 
-  // Smooth Scroll عند البحث
-  useEffect(() => {
-    if (searchTerm && internshipsSectionRef.current && filteredInternships.length > 0) {
-      setTimeout(() => {
-        internshipsSectionRef.current.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start'
-        });
-      }, 200);
-    }
-  }, [searchTerm, filteredInternships.length]);
+  const averageMatchScore = useMemo(() => {
+    if (!hasCV) return null;
+    const numericScores = internships
+      .map((item) => Number(item.match_score))
+      .filter((score) => !Number.isNaN(score));
+    if (numericScores.length === 0) return null;
+    const avg = numericScores.reduce((sum, score) => sum + score, 0) / numericScores.length;
+    return Math.round(avg);
+  }, [internships, hasCV]);
 
-  const locations = [...new Set(internships.map(i => i.location).filter(Boolean))];
+  const topMatches = useMemo(() => {
+    if (!hasCV) return [];
+    return [...internships]
+      .filter((item) => !Number.isNaN(Number(item.match_score)))
+      .sort((a, b) => Number(b.match_score) - Number(a.match_score))
+      .slice(0, 3);
+  }, [internships, hasCV]);
 
-  const isSkillMatching = (skill) => {
-    if (!searchTerm) return false;
-    return skill.toLowerCase().includes(searchTerm.toLowerCase());
-  };
+  const recentApplications = useMemo(
+    () =>
+      [...applications]
+        .sort((a, b) => new Date(b.applied_at || 0).getTime() - new Date(a.applied_at || 0).getTime())
+        .slice(0, 3),
+    [applications]
+  );
 
-  // إحصائيات الطلبات
-  const pendingCount = applications.filter(a => a.status === 'pending').length;
-  const acceptedCount = applications.filter(a => a.status === 'accepted').length;
+  const formattedDate = useMemo(
+    () =>
+      new Date().toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      }),
+    []
+  );
 
-  const progressCards = [
-    { label: 'Active Applications', count: pendingCount, icon: '📋', color: 'bg-indigo-100', textColor: 'text-indigo-600' },
-    { label: 'Available Internships', count: filteredInternships.length, icon: '🎯', color: 'bg-emerald-100', textColor: 'text-emerald-600' },
-    { label: 'Interviews', count: acceptedCount, icon: '📅', color: 'bg-amber-100', textColor: 'text-amber-600' },
+  const statsCards = [
+    { label: 'Total Applications', value: applications.length, icon: '📨', tone: 'bg-indigo-50 text-indigo-700' },
+    { label: 'Pending Reviews', value: pendingCount, icon: '⏳', tone: 'bg-amber-50 text-amber-700' },
+    { label: 'Accepted / Interviews', value: acceptedOrInterviewCount, icon: '🎉', tone: 'bg-emerald-50 text-emerald-700' },
+    {
+      label: 'Average Match Score',
+      value: hasCV && averageMatchScore != null ? `${averageMatchScore}%` : '—',
+      icon: '🎯',
+      tone: 'bg-violet-50 text-violet-700',
+    },
   ];
 
-  // 🔥 دالة التقديم مع التحقق من الـ CV
-  const handleApply = async (offerId) => {
-    if (!hasCV) {
-      alert('Please complete your CV first before applying');
-      navigate('/student/fill-cv');
-      return;
-    }
-    try {
-      const response = await studentAPI.apply(offerId);
-      if (response.data.success) {
-        alert('Application submitted successfully!');
-        fetchApplications();
-      }
-    } catch (error) {
-      console.error('Error applying:', error);
-      alert(error.response?.data?.message || 'Error applying for internship');
-    }
-  };
-
-  // الحصول على حالة الطلب لعرض معين
-  const getApplicationStatus = (offerId) => {
-    const app = applications.find(a => a.offer_id === offerId);
-    return app?.status || null;
-  };
-
-  // تنسيق عرض الحالة
   const getStatusBadge = (status) => {
-    switch(status) {
-      case 'pending':
-        return <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-medium">⏳ Pending</span>;
-      case 'accepted':
-        return <span className="px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-medium">✅ Accepted</span>;
-      case 'rejected':
-        return <span className="px-2 py-1 rounded-full bg-red-100 text-red-700 text-xs font-medium">❌ Rejected</span>;
-      case 'validated':
-        return <span className="px-2 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-medium">📄 Validated</span>;
-      default:
-        return null;
-    }
+    const map = {
+      pending: 'bg-amber-100 text-amber-700',
+      accepted: 'bg-emerald-100 text-emerald-700',
+      rejected: 'bg-red-100 text-red-700',
+      validated: 'bg-indigo-100 text-indigo-700',
+    };
+    const labels = {
+      pending: 'Pending',
+      accepted: 'Accepted',
+      rejected: 'Rejected',
+      validated: 'Interview / Validated',
+    };
+    return (
+      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${map[status] || 'bg-slate-100 text-slate-600'}`}>
+        {labels[status] || 'Unknown'}
+      </span>
+    );
   };
 
   return (
-    <div className="space-y-8">
-      {/* Hero Card */}
-      <Card variant="hero" className="p-8 bg-gradient-to-r from-indigo-600 to-indigo-700">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-          <div>
-            <h2 className="text-2xl font-bold mb-2 text-white">🚀 Find Your Next Opportunity</h2>
-            <p className="text-indigo-100 opacity-90">
-              Discover internships tailored to your skills and career goals.
+    <div className="space-y-8 bg-slate-50 min-h-full p-1 sm:p-2 rounded-2xl">
+      <Card
+        variant="elevated"
+        className="relative overflow-hidden rounded-2xl border border-indigo-200/60 
+        bg-gradient-to-br from-indigo-600 via-indigo-600 to-violet-600 
+        p-6 sm:p-8 lg:p-10 shadow-xl shadow-indigo-500/20"
+      >
+        {/* subtle glow */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_45%)] pointer-events-none" />
+
+        <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-8 md:gap-10">
+
+          {/* TEXT */}
+          <div className="max-w-2xl">
+            <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white">
+              Welcome back,{" "}
+              {JSON.parse(localStorage.getItem("user") || "{}")?.name ||
+                student?.full_name ||
+                "Student"}
+            </h2>
+
+            <p className="mt-3 text-indigo-100 text-sm sm:text-base leading-relaxed max-w-md">
+              Track your applications and discover new internship opportunities.
             </p>
+
+            <p className="mt-4 text-indigo-100/80 text-sm">
+              {formattedDate}
+            </p>
+
+            <Link
+              to="/student/internships"
+              className="inline-flex items-center mt-6 px-4 py-2.5 rounded-xl 
+        bg-white text-indigo-700 text-sm font-medium 
+        shadow-sm transition-all duration-200 
+        hover:bg-indigo-50 hover:shadow-md"
+            >
+              Explore opportunities
+            </Link>
           </div>
-          {searchTerm && (
-            <div className="px-4 py-2 bg-white/20 rounded-xl backdrop-blur-sm animate-pulse">
-              <p className="text-white text-sm">
-                🔍 Searching for: <span className="font-semibold">"{searchTerm}"</span>
-              </p>
-            </div>
-          )}
+
+          {/* IMAGE */}
+          <div className="w-full md:w-[260px] lg:w-[320px] shrink-0">
+            <img
+              src="/Images/hero44.svg"
+              alt="Student dashboard illustration"
+              className="w-full h-auto object-contain 
+        drop-shadow-[0_10px_30px_rgba(15,23,42,0.25)] 
+        transition-transform duration-300 hover:scale-[1.02]"
+            />
+          </div>
+
         </div>
       </Card>
 
-      {/* 🔥 رسالة تحذير إذا لم يكتمل الـ CV */}
       {!checkingCV && !hasCV && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">⚠️</span>
+        <Card className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <p className="font-medium text-amber-800">Complete Your CV First</p>
-              <p className="text-sm text-amber-700">You need to complete your CV before applying for internships.</p>
+              <p className="text-sm font-semibold text-amber-900">Your CV is {cvCompletion}% complete</p>
+              <div className="mt-2 h-2 w-full max-w-xs rounded-full bg-amber-100">
+                <div className="h-2 rounded-full bg-amber-500 transition-all duration-700" style={{ width: `${cvCompletion}%` }} />
+              </div>
             </div>
+            <button
+              onClick={() => navigate('/student/fill-cv')}
+              className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-all duration-200 hover:shadow-md"
+            >
+              Complete CV →
+            </button>
           </div>
-          <button
-            onClick={() => navigate('/student/fill-cv')}
-            className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm"
-          >
-            Fill CV →
-          </button>
+        </Card>
+      )}
+
+      {!checkingCV && hasCV && (
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium">
+          ✓ CV ready
         </div>
       )}
 
-      {/* Progress Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {progressCards.map((card) => (
-          <Card key={card.label} variant="elevated" className="p-6 hover:shadow-lg transition-shadow">
-            <div className="flex items-start gap-4">
-              <div className={`w-12 h-12 rounded-xl ${card.color} flex items-center justify-center text-xl`}>
-                {card.icon}
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-900">{card.count}</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        {statsCards.map((card) => (
+          <Card
+            key={card.label}
+            className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <div className="flex items-center gap-3">
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg ${card.tone}`}>{card.icon}</div>
+              <div className="min-w-0">
+                <p className="text-xl font-bold text-slate-900">{card.value}</p>
                 <p className="text-sm text-slate-600">{card.label}</p>
               </div>
             </div>
@@ -219,172 +243,107 @@ export function StudentDashboardHome() {
         ))}
       </div>
 
-      {/* فلتر الولاية */}
-      <div className="flex justify-end">
-        <div className="w-64">
-          <label className="block text-sm font-medium text-slate-700 mb-2">
-            📍 Filter by Location
-          </label>
-          <div className="relative">
-            <select
-              value={locationFilter}
-              onChange={(e) => setLocationFilter(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 outline-none appearance-none cursor-pointer"
-            >
-              <option value="">All Locations</option>
-              {locations.map(loc => (
-                <option key={loc} value={loc}>{loc}</option>
-              ))}
-            </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-              <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </div>
-          {locationFilter && (
-            <button
-              onClick={() => setLocationFilter('')}
-              className="mt-2 text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              Clear filter
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Internships Grid - مع ارتفاع موحد */}
-      <div ref={internshipsSectionRef}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-slate-900">📋 Available Internships</h3>
-          <p className="text-sm text-slate-500">{filteredInternships.length} opportunities found</p>
-        </div>
-        
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-2 border-indigo-600 border-t-transparent"></div>
-          </div>
-        ) : filteredInternships.length === 0 ? (
-          <Card className="p-12 text-center">
-            <div className="text-5xl mb-4">🔍</div>
-            <p className="text-slate-500 font-medium">No internships found</p>
-            <p className="text-slate-400 text-sm mt-1">
-              {searchTerm ? `No results for "${searchTerm}"` : 'Try adjusting your filters or check back later'}
-            </p>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredInternships.map((internship) => {
-              const appStatus = getApplicationStatus(internship.id);
-              const hasApplied = appStatus !== null;
-              
-              return (
-                <Card key={internship.id} className="p-6 hover:shadow-xl transition-all duration-200 border border-slate-100 hover:border-indigo-200 group flex flex-col h-full">
-                  {/* Company Header */}
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center">
-                        <span className="text-indigo-600 font-semibold">
-                          {internship.company_name?.charAt(0) || 'C'}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-slate-900">{internship.company_name}</p>
-                        <p className="text-xs text-slate-500 flex items-center gap-1">
-                          <span>📍</span> {internship.location || 'Remote'}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-medium whitespace-nowrap">
-                      {internship.duration || 'Not specified'}
-                    </span>
-                  </div>
-                  
-                  {/* Title */}
-                  <h4 className="font-bold text-lg text-slate-900 mb-2 line-clamp-1">
-                    {internship.title}
-                  </h4>
-                  
-                  {/* Description - ارتفاع ثابت */}
-                  <p className="text-sm text-slate-600 mb-4 line-clamp-2 min-h-[40px]">
-                    {internship.description}
-                  </p>
-                  
-                  {/* Skills */}
-                  {internship.required_skills && internship.required_skills.length > 0 && (
-                    <div className="mb-4">
-                      <div className="flex flex-wrap gap-1">
-                        {internship.required_skills.slice(0, 3).map((skill, idx) => (
-                          <span 
-                            key={idx} 
-                            className={`px-2 py-1 rounded-full text-xs transition-all ${
-                              isSkillMatching(skill)
-                                ? 'bg-indigo-100 text-indigo-700 font-medium ring-2 ring-indigo-300 shadow-sm'
-                                : 'bg-slate-100 text-slate-600'
-                            }`}
-                          >
-                            {skill}
-                          </span>
-                        ))}
-                        {internship.required_skills.length > 3 && (
-                          <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-600 text-xs">
-                            +{internship.required_skills.length - 3}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Spacer لدفع الزر للأسفل */}
-                  <div className="flex-1"></div>
-                  
-                  {/* Apply Button / Status Badge */}
-                  {hasApplied ? (
-                    <div className="mt-4 pt-2 border-t border-slate-100">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-500">Application:</span>
-                        {getStatusBadge(appStatus)}
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => handleApply(internship.id)}
-                      className="w-full mt-4 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors group-hover:shadow-md"
-                    >
-                      Apply Now
-                    </button>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Applications Section - مع عرض الطلبات */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-slate-900">📝 My Applications</h3>
-          <p className="text-sm text-slate-500">{applications.length} total</p>
+          <h3 className="text-lg font-semibold text-slate-900">Quick Actions</h3>
         </div>
-        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <Link
+            to="/student/internships"
+            className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md group"
+          >
+            <p className="text-2xl mb-2">🧭</p>
+            <h4 className="font-semibold text-slate-900 group-hover:text-indigo-700 transition-colors">Browse Internships</h4>
+            <p className="text-sm text-slate-500 mt-1">Explore opportunities matched to your profile.</p>
+          </Link>
+          <Link
+            to="/student/fill-cv"
+            className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md group"
+          >
+            <p className="text-2xl mb-2">📄</p>
+            <h4 className="font-semibold text-slate-900 group-hover:text-indigo-700 transition-colors">My CV</h4>
+            <p className="text-sm text-slate-500 mt-1">Update your profile to improve internship matching.</p>
+          </Link>
+          <Link
+            to="/student/applications"
+            className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md group"
+          >
+            <p className="text-2xl mb-2">🗂️</p>
+            <h4 className="font-semibold text-slate-900 group-hover:text-indigo-700 transition-colors">My Applications</h4>
+            <p className="text-sm text-slate-500 mt-1">Track your application statuses and updates.</p>
+          </Link>
+        </div>
+      </div>
+
+      {hasCV && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-slate-900">Top Matches</h3>
+            <Link to="/student/internships" className="text-sm font-medium text-indigo-600 hover:text-indigo-700">
+              View all internships →
+            </Link>
+          </div>
+
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {[1, 2, 3].map((item) => (
+                <div key={item} className="rounded-2xl border border-slate-100 bg-white p-5 animate-pulse h-40" />
+              ))}
+            </div>
+          ) : topMatches.length === 0 ? (
+            <Card className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-slate-500">
+              No match scores available yet.
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {topMatches.map((internship) => (
+                <Card
+                  key={internship.id}
+                  className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h4 className="font-semibold text-slate-900 line-clamp-1">{internship.title}</h4>
+                      <p className="text-sm text-slate-500 mt-1">{internship.company_name || 'Company'}</p>
+                    </div>
+                    <CircularProgress value={Number(internship.match_score)} size={52} stroke={5} />
+                  </div>
+                  <div className="mt-4 text-sm text-slate-600 space-y-1">
+                    <p>📍 {internship.location || 'Remote'}</p>
+                    <p>⏱️ {internship.duration || 'Not specified'}</p>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-slate-900">Recent Applications</h3>
+          <Link to="/student/applications" className="text-sm font-medium text-indigo-600 hover:text-indigo-700">
+            View all applications →
+          </Link>
+        </div>
+
         {loadingApps ? (
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin rounded-full h-6 w-6 border-2 border-indigo-600 border-t-transparent"></div>
           </div>
-        ) : applications.length === 0 ? (
-          <Card className="p-8 text-center">
-            <div className="text-5xl mb-3">📭</div>
+        ) : recentApplications.length === 0 ? (
+          <Card className="rounded-2xl border border-slate-100 bg-white p-8 text-center">
+            <div className="text-4xl mb-3">📭</div>
             <p className="text-slate-500 font-medium">No applications yet</p>
-            <p className="text-slate-400 text-sm mt-1">Apply to internships above to track your progress</p>
+            <p className="text-slate-400 text-sm mt-1">Your latest applications will appear here.</p>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {applications.map((app) => (
-              <Card key={app.id} className="p-5 border border-slate-100 hover:shadow-md transition-shadow">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {recentApplications.map((app) => (
+              <Card
+                key={app.id}
+                className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              >
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <h4 className="font-semibold text-slate-900">{app.offer_title}</h4>
@@ -392,14 +351,25 @@ export function StudentDashboardHome() {
                   </div>
                   {getStatusBadge(app.status)}
                 </div>
-                <p className="text-xs text-slate-400 mt-2">
-                  Applied on: {new Date(app.applied_at).toLocaleDateString()}
-                </p>
+                <p className="text-xs text-slate-400 mt-2">Applied on: {formatAppliedDate(app.applied_at)}</p>
               </Card>
             ))}
           </div>
         )}
       </div>
+
+      <style>{`
+        @keyframes fade-in {
+          from {
+            opacity: 0;
+            transform: translateY(8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }
@@ -543,97 +513,156 @@ export function StudentApplicationsPage() {
 
   const skillsForApp = (app) => app.required_skills || app.offer_required_skills || [];
 
-  return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">My Applications</h1>
-        <p className="text-slate-600 mt-1">Track your internship applications and their status</p>
-      </div>
+  const companyInitial = (company) => {
+    const value = (company || '').trim();
+    if (!value) return '?';
+    return value.charAt(0).toUpperCase();
+  };
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card variant="elevated" className="p-6 rounded-2xl border border-slate-100 bg-white shadow-sm">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
+  const iconBriefcase = (
+    <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden>
+      <rect x="2" y="7" width="20" height="14" rx="2" />
+      <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+      <path d="M2 12h20" />
+    </svg>
+  );
+  const iconClock = (
+    <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+  const iconCheck = (
+    <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden>
+      <circle cx="12" cy="12" r="10" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  );
+  const iconSearch = (
+    <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden>
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+  );
+  const iconDownload = (
+    <svg className="h-4.5 w-4.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden>
+      <path d="M12 3v12" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M5 21h14" />
+    </svg>
+  );
+  const iconInbox = (
+    <svg className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden>
+      <path d="M22 12h-4l-3 4H9l-3-4H2" />
+      <path d="M5.45 5.11 2 12v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-7l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z" />
+    </svg>
+  );
+
+  return (
+    <div className="space-y-8 bg-slate-50/70 p-1">
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-indigo-900 px-8 py-10 text-white shadow-lg sm:px-10 sm:py-12">
+
+        {/* Glow effect */}
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/10 blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-indigo-400/20 blur-2xl"></div>
+
+        <div className="relative flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
+
+          {/* TEXT */}
+          <div className="max-w-lg space-y-3">
+            <h1 className="text-3xl font-semibold leading-tight sm:text-4xl">
+              Manage Your <span className="text-indigo-200">Applications</span>
+            </h1>
+
+            <p className="text-sm text-indigo-100 sm:text-base">
+              Stay organized and track all your internship applications in one place.
+              Never miss an update again.
+            </p>
+
+          </div>
+
+          {/* IMAGE */}
+          <div className="w-full md:w-[260px] lg:w-[320px] shrink-0">
+            <img
+              src="/Images/hero77.svg"
+              alt="Student dashboard illustration"
+              className="w-full h-auto object-contain 
+              drop-shadow-[0_10px_30px_rgba(15,23,42,0.25)] 
+              transition-transform duration-300 hover:scale-[1.02]"
+            />
+          </div>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Card className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600">{iconBriefcase}</div>
             <div>
-              <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
+              <p className="text-2xl font-semibold text-slate-900">{stats.total}</p>
               <p className="text-sm text-slate-600">Total Applications</p>
             </div>
           </div>
         </Card>
-        <Card variant="elevated" className="p-6 rounded-2xl border border-slate-100 bg-amber-50/60 shadow-sm">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
+        <Card className="rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 text-amber-700">{iconClock}</div>
             <div>
-              <p className="text-2xl font-bold text-slate-900">{stats.pending}</p>
+              <p className="text-2xl font-semibold text-slate-900">{stats.pending}</p>
               <p className="text-sm text-slate-600">Pending Reviews</p>
             </div>
           </div>
         </Card>
-        <Card variant="elevated" className="p-6 rounded-2xl border border-slate-100 bg-emerald-50/60 shadow-sm">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
+        <Card className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">{iconCheck}</div>
             <div>
-              <p className="text-2xl font-bold text-slate-900">{stats.accepted}</p>
+              <p className="text-2xl font-semibold text-slate-900">{stats.accepted}</p>
               <p className="text-sm text-slate-600">Accepted / Interview</p>
             </div>
           </div>
         </Card>
       </div>
 
-      <Card className="p-4 sm:p-6 rounded-2xl border border-slate-100 bg-white shadow-sm">
-        <div className="flex flex-col gap-4">
+      <Card className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col gap-5">
           <div className="flex flex-wrap gap-2">
             {statusFilters.map((f) => (
               <button
                 key={f.id}
                 type="button"
                 onClick={() => setStatusFilter(f.id)}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  statusFilter === f.id
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
+                className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${statusFilter === f.id
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
               >
                 {f.label}
               </button>
             ))}
           </div>
-          <div className="flex flex-col lg:flex-row gap-4 lg:items-center lg:justify-between">
-            <div className="relative flex-1 max-w-md">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </span>
+
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="relative w-full max-w-md">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">{iconSearch}</span>
               <input
                 type="search"
-                placeholder="Search by internship title or company..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 outline-none transition-shadow"
+                placeholder="Search by internship title or company..."
+                className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all duration-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
               />
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <label htmlFor="app-sort" className="text-sm font-medium text-slate-600 whitespace-nowrap">
+
+            <div className="flex items-center gap-2">
+              <label htmlFor="app-sort" className="text-sm font-medium text-slate-600">
                 Sort by
               </label>
               <select
                 id="app-sort"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 text-sm font-medium focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 outline-none cursor-pointer min-w-[160px]"
+                className="min-w-[170px] rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition-all duration-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
               >
                 <option value="date">Date (newest first)</option>
                 <option value="match">Match score</option>
@@ -643,141 +672,136 @@ export function StudentApplicationsPage() {
         </div>
       </Card>
 
-      {error && !loading && (
-        <Card className="p-6 rounded-2xl border border-red-100 bg-red-50/80">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <p className="text-red-800 text-sm font-medium">{error}</p>
+      {error && !loading ? (
+        <Card className="rounded-2xl border border-red-100 bg-red-50 p-5 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-red-700">{error}</p>
             <button
               type="button"
               onClick={fetchApplications}
-              className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors shrink-0"
+              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
             >
               Retry
             </button>
           </div>
         </Card>
-      )}
+      ) : null}
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="rounded-2xl border border-slate-100 bg-white p-6 animate-pulse shadow-sm"
-            >
-              <div className="flex justify-between gap-4 mb-4">
-                <div className="space-y-2 flex-1">
-                  <div className="h-5 bg-slate-200 rounded-lg w-3/4" />
-                  <div className="h-4 bg-slate-100 rounded-lg w-1/2" />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {[1, 2, 3, 4].map((item) => (
+            <div key={item} className="animate-pulse rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="h-12 w-12 shrink-0 rounded-full bg-slate-200" />
+                  <div className="space-y-2">
+                    <div className="h-5 w-44 rounded-lg bg-slate-200" />
+                    <div className="h-4 w-28 rounded-lg bg-slate-100" />
+                  </div>
                 </div>
-                <div className="h-8 w-24 bg-slate-100 rounded-full shrink-0" />
+                <div className="h-12 w-12 rounded-full bg-slate-100" />
               </div>
-              <div className="h-4 bg-slate-100 rounded w-1/3 mb-4" />
-              <div className="flex gap-2 mb-4">
-                <div className="h-6 w-16 bg-slate-100 rounded-full" />
-                <div className="h-6 w-20 bg-slate-100 rounded-full" />
+              <div className="mb-4 h-4 w-36 rounded-lg bg-slate-100" />
+              <div className="mb-4 flex gap-2">
+                <div className="h-6 w-16 rounded-full bg-slate-100" />
+                <div className="h-6 w-20 rounded-full bg-slate-100" />
+                <div className="h-6 w-14 rounded-full bg-slate-100" />
               </div>
-              <div className="h-14 w-14 rounded-full bg-slate-100 ml-auto" />
+              <div className="h-8 w-32 rounded-lg bg-slate-100" />
             </div>
           ))}
         </div>
       ) : applications.length === 0 ? (
-        <Card className="p-12 sm:p-16 rounded-2xl border border-slate-100 bg-white text-center shadow-sm">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-indigo-50 text-indigo-600 mb-6">
-            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-            </svg>
+        <Card className="rounded-2xl border border-slate-100 bg-white p-14 text-center shadow-sm">
+          <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+            {iconInbox}
           </div>
-          <h2 className="text-lg font-semibold text-slate-900 mb-2">No applications yet</h2>
-          <p className="text-slate-500 text-sm max-w-md mx-auto mb-8">
-            When you apply to internships, they will show up here with status updates and match scores.
-          </p>
+          <h2 className="text-xl font-semibold text-slate-900">No applications yet</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">Apply to internships to see them here</p>
           <Link
             to="/student/internships"
-            className="inline-flex items-center justify-center px-6 py-3 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-all duration-200 shadow-md shadow-indigo-600/25 hover:shadow-lg"
+            className="mt-7 inline-flex items-center justify-center rounded-xl bg-indigo-600 px-6 py-3 text-sm font-medium text-white transition-all duration-200 hover:bg-indigo-700 hover:shadow-lg"
           >
             Browse Internships
           </Link>
         </Card>
       ) : filteredSorted.length === 0 ? (
-        <Card className="p-12 rounded-2xl border border-slate-100 bg-white text-center shadow-sm">
-          <p className="text-slate-600 font-medium mb-2">No applications match your filters</p>
-          <p className="text-slate-500 text-sm mb-4">Try changing the status filter or search terms.</p>
+        <Card className="rounded-2xl border border-slate-100 bg-white p-12 text-center shadow-sm">
+          <p className="font-medium text-slate-700">No applications match your filters</p>
+          <p className="mt-1 text-sm text-slate-500">Try changing the status filter or search terms.</p>
           <button
             type="button"
             onClick={() => {
               setStatusFilter('all');
               setSearchQuery('');
             }}
-            className="text-indigo-600 font-medium text-sm hover:text-indigo-700"
+            className="mt-4 text-sm font-medium text-indigo-600 hover:text-indigo-700"
           >
             Clear filters
           </button>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {filteredSorted.map((app) => {
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {filteredSorted.map((app, idx) => {
             const skills = skillsForApp(app);
             const hasScore = app.match_score != null && app.match_score !== '' && !Number.isNaN(Number(app.match_score));
-            const canPdf =
-              app.status === 'validated' && (app.agreement_id != null || Boolean(app.pdf_url));
+            const canPdf = app.status === 'validated' && (app.agreement_id != null || Boolean(app.pdf_url));
+            const initial = companyInitial(app.offer_company);
 
             return (
               <Card
                 key={app.id}
-                className="p-6 rounded-2xl border border-slate-100 bg-white shadow-sm transition-all duration-200 hover:shadow-xl hover:scale-[1.02] hover:border-indigo-100"
+                style={{ animation: `fade-in 0.5s ease-out ${idx * 0.06}s both` }}
+                className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
               >
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-4">
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-lg text-slate-900 leading-snug line-clamp-2">
-                      {app.offer_title || 'Untitled position'}
-                    </h3>
-                    <p className="text-sm text-slate-500 mt-1">{app.offer_company || 'Company'}</p>
+                <div className="mb-4 flex items-start justify-between gap-4">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-indigo-700 text-sm font-bold text-white">
+                      {initial}
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="line-clamp-2 text-lg font-bold leading-snug text-slate-900">
+                        {app.offer_title || 'Untitled position'}
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-600">{app.offer_company || 'Company'}</p>
+                      <p className="mt-1 text-xs text-slate-500">Applied on {formatAppliedDate(app.applied_at)}</p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0 self-start sm:self-auto">
+
+                  <div className="flex shrink-0 flex-col items-end gap-2">
                     <ApplicationStatusBadge status={app.status} />
-                    {hasScore ? <CircularProgress value={Number(app.match_score)} size={56} stroke={6} /> : null}
+                    {hasScore ? <CircularProgress value={Number(app.match_score)} size={54} stroke={6} /> : null}
                   </div>
                 </div>
 
-                <p className="text-sm text-slate-600 mb-4">
-                  Applied <span className="text-slate-800 font-medium">{formatAppliedDate(app.applied_at)}</span>
-                </p>
-
                 {skills.length > 0 ? (
                   <div className="mb-4">
-                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Skills required</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {skills.slice(0, 8).map((skill, idx) => (
-                        <span
-                          key={`${app.id}-skill-${idx}`}
-                          className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-medium"
-                        >
+                      {skills.slice(0, 8).map((skill, skillIdx) => (
+                        <span key={`${app.id}-skill-${skillIdx}`} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
                           {skill}
                         </span>
                       ))}
                       {skills.length > 8 ? (
-                        <span className="px-2.5 py-1 rounded-lg bg-slate-50 text-slate-500 text-xs">+{skills.length - 8}</span>
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">+{skills.length - 8}</span>
                       ) : null}
                     </div>
                   </div>
                 ) : null}
 
                 {app.status === 'validated' ? (
-                  <div className="pt-4 border-t border-slate-100">
+                  <div className="border-t border-slate-100 pt-4">
                     {canPdf ? (
                       <button
                         type="button"
                         onClick={() => downloadPdf(app)}
                         disabled={pdfLoadingId === app.id}
-                        className="inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700 disabled:opacity-60 transition-colors"
+                        className="inline-flex items-center gap-2 rounded-lg bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-100 disabled:opacity-60"
                       >
                         {pdfLoadingId === app.id ? (
-                          <span className="inline-block h-4 w-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" aria-hidden />
+                          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" aria-hidden />
                         ) : (
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
+                          iconDownload
                         )}
                         Download PDF
                       </button>
@@ -1314,11 +1338,10 @@ export function StudentInternshipsPage() {
                     {skills.slice(0, 4).map((skill, idx) => (
                       <span
                         key={`${internship.id}-s-${idx}`}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                          isSkillMatching(skill)
-                            ? 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-200'
-                            : 'bg-slate-100 text-slate-600'
-                        }`}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${isSkillMatching(skill)
+                          ? 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-200'
+                          : 'bg-slate-100 text-slate-600'
+                          }`}
                       >
                         {skill}
                       </span>

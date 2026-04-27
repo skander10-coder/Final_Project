@@ -12,6 +12,7 @@ export default function Register() {
     password: '',
     confirm_password: ''
   });
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -47,10 +48,9 @@ export default function Register() {
 
     try {
       const response = await api.post('/api/register', registerData);
-      
       if (response.data.success) {
-        navigate('/login', { 
-          state: { message: 'Account created successfully! Please login.' } 
+        navigate('/login', {
+          state: { message: 'Account created successfully. Please login.' }
         });
       }
     } catch (error) {
@@ -61,163 +61,164 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
-        <Link to="/" className="flex items-center gap-2 justify-center mb-8">
-          <div className="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center">
-            <span className="text-white font-bold text-lg">S</span>
-          </div>
-          <span className="font-semibold text-lg text-slate-800">Stag.io</span>
-        </Link>
+    <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
 
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">Create account</h1>
-          <p className="text-slate-600 text-sm mb-6">
-            Choose your account type to get started.
-          </p>
+      <div className="w-full max-w-6xl bg-white rounded-3xl shadow-2xl overflow-hidden grid lg:grid-cols-2">
 
-          {/* Account Type Selection - مع icons كاملة */}
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            <button
-              type="button"
-              onClick={() => {
-                setAccountType('student');
-                setFormData({...formData, company_name: ''});
-              }}
-              className={`p-4 rounded-xl border-2 text-left transition-colors ${
-                accountType === 'student'
-                  ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                  : 'border-slate-200 hover:border-slate-300 text-slate-600'
-              }`}
-            >
-              <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center mb-2">
-                <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 20v-6" />
-                </svg>
-              </div>
-              <p className="font-medium">Student</p>
-              <p className="text-xs opacity-80 mt-0.5">Find internships</p>
-            </button>
-            
-            <button
-              type="button"
-              onClick={() => {
-                setAccountType('company');
-                setFormData({...formData, full_name: ''});
-              }}
-              className={`p-4 rounded-xl border-2 text-left transition-colors ${
-                accountType === 'company'
-                  ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                  : 'border-slate-200 hover:border-slate-300 text-slate-600'
-              }`}
-            >
-              <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center mb-2">
-                <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-              </div>
-              <p className="font-medium">Company</p>
-              <p className="text-xs opacity-80 mt-0.5">Post opportunities</p>
-            </button>
-          </div>
+        {/* LEFT SIDE */}
+        <div className="hidden lg:flex relative bg-gradient-to-br from-indigo-600 to-indigo-800 text-white p-12 flex-col justify-center">
 
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm">
-              {error}
+          <div className="absolute inset-0 bg-white/5"></div>
+
+          <div className="relative z-10 max-w-md">
+            <h2 className="text-4xl font-bold mb-6">
+              Create Your Account
+            </h2>
+
+            <p className="text-indigo-100 text-lg mb-10 leading-relaxed">
+              Join our platform and start connecting with opportunities tailored for you.
+            </p>
+
+            {/* SVG PLACE */}
+            <div className="w-full h-56 flex items-center justify-center">
+              <img 
+                src="/Images/register2.svg"
+                alt="Register illustration"
+                className="max-h-full max-w-full object-contain drop-shadow-xl"
+              />
             </div>
-          )}
+          </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Student Field - يظهر فقط للطالب */}
-            {accountType === 'student' && (
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Full name</label>
+          <div className="absolute -bottom-20 -left-20 w-72 h-72 bg-white/10 rounded-full"></div>
+          <div className="absolute -top-20 -right-20 w-96 h-96 bg-white/10 rounded-full"></div>
+        </div>
+
+        {/* RIGHT SIDE (FORM) */}
+        <div className="flex items-center justify-center px-8 py-12 bg-white">
+          <div className="w-full max-w-md">
+
+            <h1 className="text-3xl font-bold text-slate-900 mb-2">
+              Register
+            </h1>
+
+            <p className="text-slate-500 text-sm mb-8">
+              Choose your account type
+            </p>
+
+            {/* Account Type */}
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setAccountType('student');
+                  setFormData({ ...formData, company_name: '' });
+                }}
+                className={`p-3 rounded-xl border-2 ${
+                  accountType === 'student'
+                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                    : 'border-slate-200'
+                }`}
+              >
+                Student
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAccountType('company');
+                  setFormData({ ...formData, full_name: '' });
+                }}
+                className={`p-3 rounded-xl border-2 ${
+                  accountType === 'company'
+                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                    : 'border-slate-200'
+                }`}
+              >
+                Company
+              </button>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+
+              {accountType === 'student' && (
                 <input
                   type="text"
                   name="full_name"
                   value={formData.full_name}
                   onChange={handleChange}
-                  placeholder="John Doe"
+                  placeholder="Full name"
                   required
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none"
                 />
-              </div>
-            )}
-            
-            {/* Company Field - يظهر فقط للشركة */}
-            {accountType === 'company' && (
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Company name</label>
+              )}
+
+              {accountType === 'company' && (
                 <input
                   type="text"
                   name="company_name"
                   value={formData.company_name}
                   onChange={handleChange}
-                  placeholder="Acme Inc."
+                  placeholder="Company name"
                   required
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none"
                 />
-              </div>
-            )}
-            
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
+              )}
+
               <input
                 type="email"
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
-                placeholder="you@example.com"
+                placeholder="Email"
                 required
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300"
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none"
               />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+
               <input
                 type="password"
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
-                placeholder="••••••••"
+                placeholder="Password"
                 required
-                minLength="6"
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300"
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none"
               />
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Confirm password</label>
               <input
                 type="password"
                 name="confirm_password"
                 value={formData.confirm_password}
                 onChange={handleChange}
-                placeholder="••••••••"
+                placeholder="Confirm password"
                 required
-                minLength="6"
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300"
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none"
               />
-            </div>
-            
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Creating account...' : 'Create Account'}
-            </button>
-          </form>
 
-          <p className="mt-6 text-center text-sm text-slate-600">
-            Already have an account?{' '}
-            <Link to="/login" className="font-medium text-indigo-600 hover:text-indigo-700">
-              Sign in
-            </Link>
-          </p>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-semibold"
+              >
+                {loading ? 'Creating...' : 'Create account'}
+              </button>
+            </form>
+
+            <p className="mt-8 text-center text-sm text-slate-600">
+              Already have an account?{' '}
+              <Link to="/login" className="text-indigo-600 font-semibold">
+                Sign in
+              </Link>
+            </p>
+
+          </div>
         </div>
+
       </div>
     </div>
   );

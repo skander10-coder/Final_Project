@@ -1527,7 +1527,7 @@ export function AdminCompaniesPage() {
   );
 }
 
-const STUDENT_LEVELS = ['L1', 'L2', 'L3', 'L4', 'L5', 'M1', 'M2'];
+const STUDENT_LEVELS = ['L1', 'L2', 'L3', 'M1', 'M2'];
 
 export function AdminStudentsPage() {
   const [students, setStudents] = useState([]);

@@ -415,147 +415,158 @@ export function CompanyDashboardHome() {
     <div className="min-h-[calc(100vh-120px)] bg-slate-50">
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
         {/* Hero */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-600 to-indigo-700 shadow-sm ring-1 ring-indigo-700/30">
-          <div className="absolute inset-0 opacity-25">
-            <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-white/20 blur-3xl" />
-            <div className="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-600 to-indigo-700 shadow-lg">
+
+          {/* background */}
+          <div className="absolute inset-0 opacity-30">
+            <div className="absolute -top-32 -right-32 h-80 w-80 bg-white/20 rounded-full blur-3xl" />
+            <div className="absolute -bottom-32 -left-32 h-80 w-80 bg-white/10 rounded-full blur-3xl" />
           </div>
 
-          <div className="relative p-7 sm:p-10">
-            <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-              <div className="max-w-2xl">
-                <p className="text-indigo-100/90 text-sm font-medium">Company Dashboard</p>
-                <h1 className="mt-2 text-3xl sm:text-4xl font-semibold tracking-tight text-white">
-                  Build your pipeline. Match with the right interns—fast.
-                </h1>
-                <p className="mt-3 text-indigo-100/90">
-                  Post internships, review applicants, and make decisions with confidence using{" "}
-                  <span className="font-semibold text-white">match scores</span>.
-                </p>
-              </div>
+          <div className="relative px-8 py-12 lg:px-12 flex flex-col lg:flex-row items-center justify-between gap-10">
 
-              <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-                <button
-                  onClick={refreshAll}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white/10 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/20 hover:bg-white/15 transition-colors"
-                >
-                  <svg
-                    className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`}
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <path d="M21 12a9 9 0 1 1-2.64-6.36" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M21 3v6h-6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  Refresh
-                </button>
+            {/* TEXT */}
+            <div className="max-w-xl space-y-5 text-center lg:text-left">
+              <p className="text-indigo-100 text-sm font-medium tracking-wide">
+                Company Dashboard
+              </p>
+
+              <h1 className="text-4xl lg:text-5xl font-bold text-white leading-tight">
+                Build your pipeline faster
+              </h1>
+
+              <p className="text-indigo-100/90 text-base leading-relaxed">
+                Manage internships, review candidates and hire smarter using
+                <span className="text-white font-semibold"> match scores</span>.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-4 pt-3">
                 <button
                   onClick={() => {
                     resetForm();
                     setShowPostModal(true);
                   }}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-indigo-600 shadow-sm hover:bg-indigo-50 transition-colors"
+                  className="px-6 py-3 rounded-2xl bg-white text-indigo-600 font-semibold shadow-md hover:shadow-xl hover:scale-[1.03] transition-all"
                 >
-                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
                   Post Internship
+                </button>
+
+                <button
+                  onClick={refreshAll}
+                  className="px-6 py-3 rounded-2xl bg-white/10 text-white font-medium backdrop-blur hover:bg-white/20 transition-all"
+                >
+                  Refresh
                 </button>
               </div>
             </div>
 
-            <div className="mt-7 grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/15">
-                <p className="text-xs font-medium text-indigo-100/90">Overall average match</p>
-                <div className="mt-2 flex items-center gap-3">
-                  <MatchScoreRing score={overallAverageMatch ?? 0} size={40} stroke={6} showLabel={overallAverageMatch != null} />
-                  <div className="text-white">
-                    <div className="text-lg font-semibold">
-                      {overallAverageMatch == null ? "—" : `${Math.round(overallAverageMatch)}%`}
-                    </div>
-                    <div className="text-xs text-indigo-100/90">Across all applicants</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/15">
-                <p className="text-xs font-medium text-indigo-100/90">Active postings</p>
-                <div className="mt-2 text-2xl font-semibold text-white">{activeOffers}</div>
-                <div className="mt-1 text-xs text-indigo-100/90">Keep roles fresh and visible</div>
-              </div>
-
-              <div className="rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/15">
-                <p className="text-xs font-medium text-indigo-100/90">Pending review</p>
-                <div className="mt-2 text-2xl font-semibold text-white">{pendingApplications}</div>
-                <div className="mt-1 text-xs text-indigo-100/90">Accept or reject in one click</div>
-              </div>
+            {/* IMAGE */}
+            <div className="w-full max-w-sm flex justify-center">
+              <img
+                src="/Images/landing1.svg"
+                alt=""
+                className="object-contain drop-shadow-xl animate-[float_5s_ease-in-out_infinite]"
+              />
             </div>
+
           </div>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard
-            title="Active Postings"
-            value={activeOffers}
-            subtitle="Currently visible to students"
-            trend="▲ +3%"
-            icon={
-              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path
-                  d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            }
-          />
-          <StatCard
-            title="Total Applicants"
-            value={totalApplicants}
-            subtitle="All applications received"
-            trend="▲ +8%"
-            icon={
-              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path
-                  d="M17 20h5v-2a4 4 0 0 0-4-4h-1M9 20H2v-2a4 4 0 0 1 4-4h1"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M16 3.13a4 4 0 0 1 0 7.75M8 3.13a4 4 0 1 0 0 7.75"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            }
-          />
-          <StatCard
-            title="Pending Review"
-            value={pendingApplications}
-            subtitle="Needs your decision"
-            trend="▼ -2%"
-            icon={
-              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            }
-          />
-          <StatCard
-            title="Accepted"
-            value={acceptedApplications}
-            subtitle="Offers you've accepted"
-            trend="▲ +1%"
-            icon={
-              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M20 6 9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            }
-          />
+        <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-5">
+
+          {/* MATCH */}
+          <div className="relative p-5 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-lg">
+
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-3xl font-bold">
+                  {overallAverageMatch == null ? "—" : `${Math.round(overallAverageMatch)}%`}
+                </p>
+                <p className="text-sm opacity-80 mt-2 tracking-wide">
+                  MATCH SCORE
+                </p>
+              </div>
+
+              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 16l6-6 4 4 6-6" strokeLinecap="round" />
+                </svg>
+              </div>
+            </div>
+
+          </div>
+
+
+          {/* ACTIVE */}
+          <div className="relative p-5 rounded-2xl bg-gradient-to-br from-rose-500 to-rose-600 text-white shadow-lg">
+
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-3xl font-bold">
+                  {activeOffers}
+                </p>
+                <p className="text-sm opacity-80 mt-2 tracking-wide">
+                  ACTIVE POSTS
+                </p>
+              </div>
+
+              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
+                </svg>
+              </div>
+            </div>
+
+          </div>
+
+
+          {/* APPLICANTS */}
+          <div className="relative p-5 rounded-2xl bg-gradient-to-br from-pink-500 to-pink-600 text-white shadow-lg">
+
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-3xl font-bold">
+                  {totalApplicants}
+                </p>
+                <p className="text-sm opacity-80 mt-2 tracking-wide">
+                  APPLICANTS
+                </p>
+              </div>
+
+              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M16 21v-2a4 4 0 0 0-8 0v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+              </div>
+            </div>
+
+          </div>
+
+
+          {/* ACCEPTED */}
+          <div className="relative p-5 rounded-2xl bg-gradient-to-br from-slate-300 to-slate-400 text-white shadow-lg">
+
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-3xl font-bold">
+                  {acceptedApplications}
+                </p>
+                <p className="text-sm opacity-80 mt-2 tracking-wide">
+                  ACCEPTED
+                </p>
+              </div>
+
+              <div className="w-10 h-10 rounded-full bg-white/30 flex items-center justify-center">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+              </div>
+            </div>
+
+          </div>
+
         </div>
 
         {/* Quick actions + legend */}
@@ -829,9 +840,8 @@ export function CompanyDashboardHome() {
                     </div>
 
                     <div
-                      className={`mt-4 overflow-hidden transition-[max-height,opacity] duration-300 ease-out ${
-                        isOpen ? "max-h-[1200px] opacity-100" : "max-h-0 opacity-0"
-                      }`}
+                      className={`mt-4 overflow-hidden transition-[max-height,opacity] duration-300 ease-out ${isOpen ? "max-h-[1200px] opacity-100" : "max-h-0 opacity-0"
+                        }`}
                     >
                       <div className="pt-4 border-t border-slate-100">
                         {loadingApps ? (

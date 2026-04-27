@@ -14,8 +14,7 @@ export default function DashboardLayout({ navItems, searchPlaceholder, children 
     }
   }, []);
 
-  // تمرير قيمة البحث إلى الصفحات الفرعية عبر Context أو props
-  // سنستخدم Outlet context
+  
   return (
     <div className="min-h-screen bg-slate-50">
       <Sidebar navItems={navItems} />

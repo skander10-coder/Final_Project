@@ -1246,7 +1246,7 @@ def calculate_match_with_gemini(student_skills, required_skills, student_bio='',
     """
 
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         response = model.generate_content(prompt)
         score = int(response.text.strip())
         return min(100, max(0, score))  # Clamp between 0-100
@@ -1256,16 +1256,92 @@ def calculate_match_with_gemini(student_skills, required_skills, student_bio='',
         return calculate_match_simple(student_skills, required_skills)
 
 
+# def calculate_match_simple(student_skills, required_skills):
+#     """Fallback simple matching function"""
+#     if not student_skills or not required_skills:
+#         return 0
+    
+#     student_set = set(skill.lower().strip() for skill in student_skills if skill)
+#     required_set = set(skill.lower().strip() for skill in required_skills if skill)
+    
+#     if not required_set:
+#         return 0
+    
+#     matched = len(student_set.intersection(required_set))
+#     return int((matched / len(required_set)) * 100)
+
+
+
 def calculate_match_simple(student_skills, required_skills):
-    """Fallback simple matching function"""
+    """
+    Advanced matching algorithm that gives varied percentages (not just multiples of 25).
+    """
     if not student_skills or not required_skills:
         return 0
     
+    # Convert to lowercase sets
     student_set = set(skill.lower().strip() for skill in student_skills if skill)
     required_set = set(skill.lower().strip() for skill in required_skills if skill)
     
     if not required_set:
         return 0
     
-    matched = len(student_set.intersection(required_set))
-    return int((matched / len(required_set)) * 100)
+    # Skill categories for related matching
+    related_skills = {
+        'python': ['django', 'flask', 'fastapi', 'numpy', 'pandas'],
+        'javascript': ['react', 'vue', 'angular', 'node', 'express'],
+        'frontend': ['react', 'vue', 'angular', 'html', 'css', 'tailwind'],
+        'backend': ['django', 'flask', 'node', 'express', 'spring', 'laravel'],
+        'database': ['sql', 'postgresql', 'mysql', 'mongodb', 'sqlite'],
+        'devops': ['docker', 'kubernetes', 'aws', 'ci/cd', 'jenkins'],
+        'mobile': ['flutter', 'react native', 'swift', 'kotlin', 'android'],
+        'ui/ux': ['figma', 'adobe xd', 'sketch', 'photoshop', 'illustrator'],
+        'datascience': ['python', 'pandas', 'numpy', 'tensorflow', 'sklearn'],
+    }
+    
+    # Build reverse mapping for quick lookup
+    skill_to_category = {}
+    for category, skills in related_skills.items():
+        for skill in skills:
+            if skill not in skill_to_category:
+                skill_to_category[skill] = []
+            skill_to_category[skill].append(category)
+    
+    exact_matches = 0
+    partial_matches = 0
+    related_matches = 0
+    
+    for req_skill in required_set:
+        matched = False
+        
+        # 1. Exact match
+        if req_skill in student_set:
+            exact_matches += 1
+            matched = True
+        
+        # 2. Partial match (contains or is contained)
+        if not matched:
+            for student_skill in student_set:
+                if req_skill in student_skill or student_skill in req_skill:
+                    partial_matches += 0.5
+                    matched = True
+                    break
+        
+        # 3. Related match (same category)
+        if not matched:
+            req_categories = skill_to_category.get(req_skill, [])
+            for student_skill in student_set:
+                student_categories = skill_to_category.get(student_skill, [])
+                if any(cat in req_categories for cat in student_categories):
+                    related_matches += 0.3
+                    matched = True
+                    break
+    
+    # Calculate weighted score (max possible = len(required_set))
+    weighted_score = exact_matches + partial_matches + related_matches
+    weighted_score = min(weighted_score, len(required_set))
+    
+    # Calculate percentage (allows decimals for variety)
+    percentage = (weighted_score / len(required_set)) * 100
+    
+    return int(round(percentage))
