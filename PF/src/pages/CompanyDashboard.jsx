@@ -3,89 +3,55 @@ import { companyAPI } from "../services/api";
 import Card from "../components/ui/Card";
 import Modal from "../components/ui/Modal";
 
-function clampScore(value) {
+// ==================== UTILITIES ====================
+const clampScore = (value) => {
   const n = Number(value);
-  if (Number.isNaN(n)) return 0;
+  if (isNaN(n)) return 0;
   return Math.max(0, Math.min(100, n));
-}
+};
 
-function scoreColor(score) {
+const scoreColor = (score) => {
   const s = clampScore(score);
-  if (s >= 70) return "text-green-500";
-  if (s >= 40) return "text-amber-500";
-  return "text-red-500";
-}
+  if (s >= 70) return "text-emerald-600";
+  if (s >= 40) return "text-amber-600";
+  return "text-rose-600";
+};
 
-function scoreRingStroke(score) {
+const scoreRingStroke = (score) => {
   const s = clampScore(score);
-  if (s >= 70) return "stroke-green-500";
+  if (s >= 70) return "stroke-emerald-500";
   if (s >= 40) return "stroke-amber-500";
-  return "stroke-red-500";
-}
+  return "stroke-rose-500";
+};
 
-function formatDate(value) {
+const formatDate = (value) => {
   if (!value) return "—";
   try {
     return new Date(value).toLocaleDateString();
   } catch {
     return "—";
   }
-}
+};
 
-function getOfferIdFromApplication(app) {
-  return (
-    app?.offer_id ??
-    app?.internship_id ??
-    app?.offerId ??
-    app?.internshipId ??
-    app?.offer?.id ??
-    null
-  );
-}
-
-function getApplicantSkills(app) {
-  const raw =
-    app?.student_skills ??
-    app?.skills ??
-    app?.student?.skills ??
-    app?.student?.required_skills ??
-    [];
-
-  if (Array.isArray(raw)) return raw.filter(Boolean);
-  if (typeof raw === "string") {
-    return raw
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }
-  return [];
-}
-
-function initials(name) {
+const initials = (name) => {
   if (!name) return "?";
-  const parts = String(name).trim().split(/\s+/).filter(Boolean);
-  const first = parts[0]?.[0] ?? "?";
+  const parts = String(name).trim().split(/\s+/);
+  const first = parts[0]?.[0] || "?";
   const last = parts.length > 1 ? parts[parts.length - 1]?.[0] : "";
   return (first + last).toUpperCase();
-}
+};
 
-function MatchScoreRing({ score, size = 44, stroke = 6, showLabel = true }) {
+// ==================== COMPONENTS ====================
+const MatchScoreRing = ({ score, size = 44, stroke = 6, showLabel = true }) => {
   const s = clampScore(score);
   const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const dash = (s / 100) * c;
+  const circumference = 2 * Math.PI * r;
+  const dash = (s / 100) * circumference;
 
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="block">
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          className="stroke-slate-200"
-          strokeWidth={stroke}
-        />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" className="stroke-slate-200" strokeWidth={stroke} />
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -93,102 +59,56 @@ function MatchScoreRing({ score, size = 44, stroke = 6, showLabel = true }) {
           fill="none"
           strokeWidth={stroke}
           strokeLinecap="round"
-          className={`${scoreRingStroke(s)} transition-[stroke-dasharray] duration-700 ease-out`}
+          className={`${scoreRingStroke(s)} transition-all duration-700 ease-out`}
           style={{
-            strokeDasharray: `${dash} ${c - dash}`,
+            strokeDasharray: `${dash} ${circumference - dash}`,
             transform: "rotate(-90deg)",
             transformOrigin: "50% 50%",
           }}
         />
       </svg>
-      {showLabel ? (
-        <div className="absolute inset-0 grid place-items-center">
-          <div className="text-xs font-semibold text-slate-900">{Math.round(s)}%</div>
+      {showLabel && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-xs font-semibold text-slate-800">{Math.round(s)}%</span>
         </div>
-      ) : null}
+      )}
     </div>
   );
-}
+};
 
-function StatCard({ title, value, subtitle, icon, trend }) {
+const StatusPill = ({ isActive }) => (
+  <span
+    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${isActive
+        ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+        : "bg-slate-100 text-slate-600 ring-1 ring-slate-200"
+      }`}
+  >
+    <span className={`h-1.5 w-1.5 rounded-full ${isActive ? "bg-emerald-500" : "bg-slate-400"}`} />
+    {isActive ? "Active" : "Closed"}
+  </span>
+);
+
+const ApplicationStatusBadge = ({ status }) => {
+  const config = {
+    pending: { bg: "bg-amber-50", text: "text-amber-700", ring: "ring-amber-200", label: "Pending" },
+    accepted: { bg: "bg-emerald-50", text: "text-emerald-700", ring: "ring-emerald-200", label: "Accepted" },
+    rejected: { bg: "bg-rose-50", text: "text-rose-700", ring: "ring-rose-200", label: "Rejected" },
+  };
+  const style = config[status] || { bg: "bg-slate-50", text: "text-slate-600", ring: "ring-slate-200", label: status };
   return (
-    <Card className="group p-6 bg-white shadow-sm hover:shadow-md transition-all duration-200 border border-slate-100">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-medium text-slate-600">{title}</p>
-          <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{value}</p>
-          {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
-          {trend ? (
-            <div className="mt-3 inline-flex items-center gap-2 text-xs text-slate-500">
-              <span className="inline-flex items-center rounded-full bg-slate-50 px-2 py-1 ring-1 ring-slate-200">
-                {trend}
-              </span>
-              <span>vs. last week</span>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 grid place-items-center ring-1 ring-indigo-100 group-hover:scale-[1.02] transition-transform">
-          {icon}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function StatusPill({ isActive }) {
-  if (isActive) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-        Active
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
-      <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-      Closed
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${style.bg} ${style.text} ring-1 ${style.ring}`}>
+      {style.label}
     </span>
   );
-}
+};
 
-function ApplicationStatusBadge({ status }) {
-  switch (status) {
-    case "pending":
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-200">
-          ⏳ Pending
-        </span>
-      );
-    case "accepted":
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
-          ✅ Accepted
-        </span>
-      );
-    case "rejected":
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 ring-1 ring-red-200">
-          ❌ Rejected
-        </span>
-      );
-    default:
-      return (
-        <span className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
-          {String(status ?? "—")}
-        </span>
-      );
-  }
-}
-
+// ==================== MAIN COMPONENT ====================
 export function CompanyDashboardHome() {
   const [offers, setOffers] = useState([]);
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingApps, setLoadingApps] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
   const [showPostModal, setShowPostModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingOffer, setEditingOffer] = useState(null);
@@ -200,10 +120,10 @@ export function CompanyDashboardHome() {
     duration: "",
   });
   const [submitting, setSubmitting] = useState(false);
-
   const [openApplicants, setOpenApplicants] = useState({});
-  const [updatingApplicationId, setUpdatingApplicationId] = useState(null);
+  const [updatingAppId, setUpdatingAppId] = useState(null);
 
+  // Fetch data
   useEffect(() => {
     fetchOffers();
     fetchApplications();
@@ -212,12 +132,10 @@ export function CompanyDashboardHome() {
   const fetchOffers = async () => {
     setLoading(true);
     try {
-      const response = await companyAPI.getInternships();
-      if (response.data.success) {
-        setOffers(response.data.offers);
-      }
-    } catch (error) {
-      console.error("Error fetching offers:", error);
+      const res = await companyAPI.getInternships();
+      if (res.data.success) setOffers(res.data.offers || []);
+    } catch (err) {
+      console.error("Error fetching offers:", err);
     } finally {
       setLoading(false);
     }
@@ -226,12 +144,10 @@ export function CompanyDashboardHome() {
   const fetchApplications = async () => {
     setLoadingApps(true);
     try {
-      const response = await companyAPI.getApplications();
-      if (response.data.success) {
-        setApplications(response.data.applications);
-      }
-    } catch (error) {
-      console.error("Error fetching applications:", error);
+      const res = await companyAPI.getApplications();
+      if (res.data.success) setApplications(res.data.applications || []);
+    } catch (err) {
+      console.error("Error fetching applications:", err);
     } finally {
       setLoadingApps(false);
     }
@@ -243,21 +159,10 @@ export function CompanyDashboardHome() {
     setRefreshing(false);
   };
 
-  const handleInputChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
-
+  // Form handlers
+  const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
   const resetForm = () => {
-    setFormData({
-      title: "",
-      description: "",
-      required_skills: "",
-      location: "",
-      duration: "",
-    });
+    setFormData({ title: "", description: "", required_skills: "", location: "", duration: "" });
     setEditingOffer(null);
   };
 
@@ -276,26 +181,20 @@ export function CompanyDashboardHome() {
   const handleSubmitOffer = async (e) => {
     e.preventDefault();
     setSubmitting(true);
-
     try {
       const data = {
         ...formData,
-        required_skills: formData.required_skills
-          .split(",")
-          .map((s) => s.trim())
-          .filter((s) => s),
+        required_skills: formData.required_skills.split(",").map(s => s.trim()).filter(Boolean),
       };
-
-      const response = await companyAPI.createInternship(data);
-
-      if (response.data.success) {
+      const res = await companyAPI.createInternship(data);
+      if (res.data.success) {
         setShowPostModal(false);
         resetForm();
         fetchOffers();
       }
-    } catch (error) {
-      console.error("Error creating offer:", error);
-      alert(error.response?.data?.message || "Error creating offer");
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || "Error creating offer");
     } finally {
       setSubmitting(false);
     }
@@ -304,26 +203,20 @@ export function CompanyDashboardHome() {
   const handleUpdateOffer = async (e) => {
     e.preventDefault();
     setSubmitting(true);
-
     try {
       const data = {
         ...formData,
-        required_skills: formData.required_skills
-          .split(",")
-          .map((s) => s.trim())
-          .filter((s) => s),
+        required_skills: formData.required_skills.split(",").map(s => s.trim()).filter(Boolean),
       };
-
-      const response = await companyAPI.updateInternship(editingOffer.id, data);
-
-      if (response.data.success) {
+      const res = await companyAPI.updateInternship(editingOffer.id, data);
+      if (res.data.success) {
         setShowEditModal(false);
         resetForm();
         fetchOffers();
       }
-    } catch (error) {
-      console.error("Error updating offer:", error);
-      alert(error.response?.data?.message || "Error updating offer");
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || "Error updating offer");
     } finally {
       setSubmitting(false);
     }
@@ -331,209 +224,131 @@ export function CompanyDashboardHome() {
 
   const handleDeleteOffer = async (id) => {
     if (!confirm("Are you sure you want to delete this offer?")) return;
-
     try {
-      const response = await companyAPI.deleteInternship(id);
-      if (response.data.success) {
-        fetchOffers();
-        fetchApplications();
-      }
-    } catch (error) {
-      console.error("Error deleting offer:", error);
+      await companyAPI.deleteInternship(id);
+      await fetchOffers();
+      await fetchApplications();
+    } catch (err) {
+      console.error(err);
       alert("Error deleting offer");
     }
   };
 
-  const handleUpdateApplicationStatus = async (applicationId, status) => {
-    setUpdatingApplicationId(applicationId);
+  const handleUpdateStatus = async (appId, status) => {
+    setUpdatingAppId(appId);
     try {
-      const response = await companyAPI.updateApplicationStatus(applicationId, status);
-      if (response.data.success) {
-        await fetchApplications();
-      }
-    } catch (error) {
-      console.error("Error updating application status:", error);
-      alert(error.response?.data?.message || "Error updating application");
+      const res = await companyAPI.updateApplicationStatus(appId, status);
+      if (res.data.success) await fetchApplications();
+    } catch (err) {
+      console.error(err);
+      alert("Error updating application status");
     } finally {
-      setUpdatingApplicationId(null);
+      setUpdatingAppId(null);
     }
   };
 
-  const appsByOfferId = useMemo(() => {
+  // Computed metrics
+  const metrics = useMemo(() => {
+    const active = offers.filter(o => o.is_active).length;
+    const totalApps = applications.length;
+    const pending = applications.filter(a => a.status === "pending").length;
+    const accepted = applications.filter(a => a.status === "accepted").length;
+    const avgMatch = applications.reduce((sum, a) => sum + clampScore(a.match_score), 0) / (applications.length || 1);
+    return { active, totalApps, pending, accepted, avgMatch };
+  }, [offers, applications]);
+
+  const groupedApps = useMemo(() => {
     const map = new Map();
-    for (const app of applications || []) {
-      const offerId = getOfferIdFromApplication(app);
-      const key = offerId ?? `unknown:${app?.offer_title ?? "Unknown"}`;
-      const list = map.get(key) ?? [];
+    applications.forEach(app => {
+      const key = app.offer_id || app.offer?.id;
+      const list = map.get(key) || [];
       list.push(app);
       map.set(key, list);
+    });
+    for (const list of map.values()) {
+      list.sort((a, b) => clampScore(b.match_score) - clampScore(a.match_score));
     }
-
-    for (const [k, list] of map.entries()) {
-      list.sort((a, b) => clampScore(b?.match_score) - clampScore(a?.match_score));
-      map.set(k, list);
-    }
-
     return map;
   }, [applications]);
 
-  const offerMetrics = useMemo(() => {
-    const metrics = new Map();
-    for (const offer of offers || []) {
-      const offerId = offer?.id;
-      const apps = appsByOfferId.get(offerId) ?? [];
-      const count = apps.length;
-      const avg =
-        count === 0 ? null : apps.reduce((sum, a) => sum + clampScore(a?.match_score), 0) / count;
-      metrics.set(offerId, { count, avg });
-    }
-    return metrics;
-  }, [offers, appsByOfferId]);
-
-  const activeOffers = (offers || []).filter((o) => o.is_active).length;
-  const totalApplicants = (applications || []).length;
-  const pendingApplications = (applications || []).filter((a) => a.status === "pending").length;
-  const acceptedApplications = (applications || []).filter((a) => a.status === "accepted").length;
-
-  const overallAverageMatch = useMemo(() => {
-    const scored = (applications || []).map((a) => clampScore(a?.match_score));
-    if (scored.length === 0) return null;
-    return scored.reduce((s, n) => s + n, 0) / scored.length;
-  }, [applications]);
-
-  const offersSorted = useMemo(() => {
-    const list = [...(offers || [])];
-    list.sort((a, b) => {
-      const da = new Date(a?.created_at ?? a?.posted_at ?? a?.createdAt ?? 0).getTime() || 0;
-      const db = new Date(b?.created_at ?? b?.posted_at ?? b?.createdAt ?? 0).getTime() || 0;
-      return db - da;
-    });
-    return list;
+  // Sort offers by date (newest first)
+  const sortedOffers = useMemo(() => {
+    return [...offers].sort((a, b) => new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0));
   }, [offers]);
 
   return (
-    <div className="min-h-[calc(100vh-120px)] bg-slate-50">
-      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
-        {/* Hero */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-600 to-indigo-700 shadow-lg">
-
-          {/* background */}
-          <div className="absolute inset-0 opacity-30">
-            <div className="absolute -top-32 -right-32 h-80 w-80 bg-white/20 rounded-full blur-3xl" />
-            <div className="absolute -bottom-32 -left-32 h-80 w-80 bg-white/10 rounded-full blur-3xl" />
+    <div className="min-h-screen bg-slate-50 py-6 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto space-y-8">
+        {/* Hero Section */}
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-600 to-indigo-700 shadow-xl">
+          <div className="absolute inset-0 opacity-20">
+            <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-white/20 blur-3xl" />
+            <div className="absolute -bottom-32 -left-32 h-80 w-80 rounded-full bg-white/10 blur-3xl" />
           </div>
-
-          <div className="relative px-8 py-12 lg:px-12 flex flex-col lg:flex-row items-center justify-between gap-10">
-
-            {/* TEXT */}
-            <div className="max-w-xl space-y-5 text-center lg:text-left">
-              <p className="text-indigo-100 text-sm font-medium tracking-wide">
-                Company Dashboard
+          <div className="relative px-8 py-12 flex flex-col lg:flex-row items-center justify-between gap-10">
+            <div className="max-w-xl text-center lg:text-left space-y-4">
+              <p className="text-indigo-100 text-sm font-medium tracking-wide">Company Dashboard</p>
+              <h1 className="text-4xl lg:text-5xl font-bold text-white leading-tight">Build your pipeline faster</h1>
+              <p className="text-indigo-100/90 text-base">
+                Manage internships, review candidates, and hire smarter using{" "}
+                <span className="font-semibold text-white">match scores</span>.
               </p>
-
-              <h1 className="text-4xl lg:text-5xl font-bold text-white leading-tight">
-                Build your pipeline faster
-              </h1>
-
-              <p className="text-indigo-100/90 text-base leading-relaxed">
-                Manage internships, review candidates and hire smarter using
-                <span className="text-white font-semibold"> match scores</span>.
-              </p>
-
-              <div className="flex flex-col sm:flex-row gap-4 pt-3">
+              <div className="flex flex-wrap gap-4 pt-3 justify-center lg:justify-start">
                 <button
-                  onClick={() => {
-                    resetForm();
-                    setShowPostModal(true);
-                  }}
-                  className="px-6 py-3 rounded-2xl bg-white text-indigo-600 font-semibold shadow-md hover:shadow-xl hover:scale-[1.03] transition-all"
+                  onClick={() => setShowPostModal(true)}
+                  className="px-6 py-3 rounded-xl bg-white text-indigo-600 font-semibold shadow-md hover:shadow-lg transition-all"
                 >
                   Post Internship
                 </button>
-
                 <button
                   onClick={refreshAll}
-                  className="px-6 py-3 rounded-2xl bg-white/10 text-white font-medium backdrop-blur hover:bg-white/20 transition-all"
+                  disabled={refreshing}
+                  className="px-6 py-3 rounded-xl bg-white/10 text-white font-medium hover:bg-white/20 transition-all disabled:opacity-50"
                 >
-                  Refresh
+                  {refreshing ? "Refreshing..." : "Refresh"}
                 </button>
               </div>
             </div>
-
-            {/* IMAGE */}
-            <div className="w-full max-w-sm flex justify-center">
-              <img
-                src="/Images/landing1.svg"
-                alt=""
-                className="object-contain drop-shadow-xl animate-[float_5s_ease-in-out_infinite]"
-              />
+            <div className="max-w-sm">
+              <img src="/Images/landing1.svg" alt="Illustration" className="drop-shadow-xl animate-[float_5s_ease-in-out_infinite]" />
             </div>
-
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-5">
-
-          {/* MATCH */}
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
           <div className="relative p-5 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-lg">
-
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-3xl font-bold">
-                  {overallAverageMatch == null ? "—" : `${Math.round(overallAverageMatch)}%`}
-                </p>
-                <p className="text-sm opacity-80 mt-2 tracking-wide">
-                  MATCH SCORE
-                </p>
+                <p className="text-3xl font-bold">{Math.round(metrics.avgMatch)}%</p>
+                <p className="text-sm opacity-80 mt-2 tracking-wide">MATCH SCORE</p>
               </div>
-
               <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M4 16l6-6 4 4 6-6" strokeLinecap="round" />
                 </svg>
               </div>
             </div>
-
           </div>
-
-
-          {/* ACTIVE */}
-          <div className="relative p-5 rounded-2xl bg-gradient-to-br from-rose-500 to-rose-600 text-white shadow-lg">
-
+          <div className="relative p-5 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-lg">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-3xl font-bold">
-                  {activeOffers}
-                </p>
-                <p className="text-sm opacity-80 mt-2 tracking-wide">
-                  ACTIVE POSTS
-                </p>
+                <p className="text-3xl font-bold">{metrics.active}</p>
+                <p className="text-sm opacity-80 mt-2 tracking-wide">ACTIVE POSTS</p>
               </div>
-
               <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
                 </svg>
               </div>
             </div>
-
           </div>
-
-
-          {/* APPLICANTS */}
-          <div className="relative p-5 rounded-2xl bg-gradient-to-br from-pink-500 to-pink-600 text-white shadow-lg">
-
+          <div className="relative p-5 rounded-2xl bg-gradient-to-br from-rose-500 to-rose-600 text-white shadow-lg">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-3xl font-bold">
-                  {totalApplicants}
-                </p>
-                <p className="text-sm opacity-80 mt-2 tracking-wide">
-                  APPLICANTS
-                </p>
+                <p className="text-3xl font-bold">{metrics.totalApps}</p>
+                <p className="text-sm opacity-80 mt-2 tracking-wide">APPLICANTS</p>
               </div>
-
               <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M16 21v-2a4 4 0 0 0-8 0v2" />
@@ -541,709 +356,560 @@ export function CompanyDashboardHome() {
                 </svg>
               </div>
             </div>
-
           </div>
-
-
-          {/* ACCEPTED */}
-          <div className="relative p-5 rounded-2xl bg-gradient-to-br from-slate-300 to-slate-400 text-white shadow-lg">
-
+          <div className="relative p-5 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-3xl font-bold">
-                  {acceptedApplications}
-                </p>
-                <p className="text-sm opacity-80 mt-2 tracking-wide">
-                  ACCEPTED
-                </p>
+                <p className="text-3xl font-bold">{metrics.accepted}</p>
+                <p className="text-sm opacity-80 mt-2 tracking-wide">ACCEPTED</p>
               </div>
-
-              <div className="w-10 h-10 rounded-full bg-white/30 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M20 6 9 17l-5-5" />
                 </svg>
               </div>
             </div>
-
           </div>
-
         </div>
 
-        {/* Quick actions + legend */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <Card className="p-6 bg-white shadow-sm border border-slate-100">
-            <div>
-              <h2 className="text-base font-semibold text-slate-900">Quick actions</h2>
-              <p className="mt-1 text-sm text-slate-600">Common actions to keep you moving.</p>
-            </div>
-            <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Quick Actions + Legend */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="p-6">
+            <h3 className="font-semibold text-slate-900">Quick actions</h3>
+            <p className="text-sm text-slate-500 mt-1">Common actions to keep you moving.</p>
+            <div className="mt-5 space-y-3">
               <button
-                onClick={() => {
-                  resetForm();
-                  setShowPostModal(true);
-                }}
-                className="group rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left hover:border-indigo-200 hover:bg-indigo-50/50 transition-colors"
+                onClick={() => setShowPostModal(true)}
+                className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:border-indigo-200 hover:bg-indigo-50/50 transition-all"
               >
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-600 grid place-items-center ring-1 ring-indigo-100 group-hover:bg-white">
-                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">Post internship</p>
-                    <p className="text-xs text-slate-600">Create a new listing</p>
-                  </div>
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+                  </svg>
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-semibold">Post internship</p>
+                  <p className="text-xs text-slate-500">Create a new listing</p>
                 </div>
               </button>
-
               <a
                 href="/company/Candidates"
-                className="group rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left hover:border-indigo-200 hover:bg-indigo-50/50 transition-colors"
+                className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:border-indigo-200 hover:bg-indigo-50/50 transition-all"
               >
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-600 grid place-items-center ring-1 ring-indigo-100 group-hover:bg-white">
-                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path
-                        d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M8.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path d="M20 8v6M23 11h-6" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">View all candidates</p>
-                    <p className="text-xs text-slate-600">Filter and manage</p>
-                  </div>
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M16 21v-2a4 4 0 0 0-8 0v2" />
+                    <circle cx="12" cy="7" r="4" />
+                    <path d="M20 8v6M23 11h-6" strokeLinecap="round" />
+                  </svg>
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-semibold">View all candidates</p>
+                  <p className="text-xs text-slate-500">Filter and manage</p>
                 </div>
               </a>
             </div>
           </Card>
 
-          <Card className="p-6 bg-white shadow-sm border border-slate-100 lg:col-span-2">
-            <div className="flex items-center justify-between gap-4">
+          <Card className="lg:col-span-2 p-6">
+            <div className="flex flex-wrap justify-between items-center gap-4">
               <div>
-                <h2 className="text-base font-semibold text-slate-900">Match score legend</h2>
-                <p className="mt-1 text-sm text-slate-600">Green ≥70%, Amber 40–69%, Red &lt;40%.</p>
+                <h3 className="font-semibold text-slate-900">Match score legend</h3>
+                <p className="text-sm text-slate-500 mt-1">Green ≥70%, Amber 40–69%, Red &lt;40%.</p>
               </div>
-              <div className="hidden sm:flex items-center gap-3">
-                <MatchScoreRing score={82} size={40} stroke={6} />
-                <MatchScoreRing score={55} size={40} stroke={6} />
-                <MatchScoreRing score={28} size={40} stroke={6} />
+              <div className="flex gap-3">
+                <MatchScoreRing score={82} size={40} />
+                <MatchScoreRing score={55} size={40} />
+                <MatchScoreRing score={28} size={40} />
               </div>
             </div>
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
-                  <p className="text-sm font-semibold text-slate-900">Strong match</p>
-                </div>
-                <p className="mt-1 text-sm text-slate-600">≥ 70%</p>
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+                <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-500" /><span className="text-sm font-semibold">Strong match</span></div>
+                <p className="text-xs text-slate-600 mt-1">≥ 70%</p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-                  <p className="text-sm font-semibold text-slate-900">Medium match</p>
-                </div>
-                <p className="mt-1 text-sm text-slate-600">40–69%</p>
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-100">
+                <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-500" /><span className="text-sm font-semibold">Medium match</span></div>
+                <p className="text-xs text-slate-600 mt-1">40–69%</p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-                  <p className="text-sm font-semibold text-slate-900">Low match</p>
-                </div>
-                <p className="mt-1 text-sm text-slate-600">&lt; 40%</p>
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-100">
+                <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-rose-500" /><span className="text-sm font-semibold">Low match</span></div>
+                <p className="text-xs text-slate-600 mt-1">&lt; 40%</p>
               </div>
             </div>
           </Card>
         </div>
 
-        {/* Internship postings */}
-        <div className="space-y-4">
-          <div className="flex items-end justify-between gap-4">
+        {/* Internship Postings */}
+        {/* Internship Postings */}
+        <div className="space-y-6">
+
+          {/* Section Header */}
+          <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-slate-900">Internship postings</h2>
-              <p className="mt-1 text-sm text-slate-600">Grid view with applicants and match insights.</p>
+              <h2 className="text-2xl font-bold tracking-tight text-slate-900">Internship Postings</h2>
+              <p className="text-sm text-slate-400 mt-0.5">Manage your listings and review applicants</p>
             </div>
           </div>
 
+          {/* States */}
           {loading ? (
-            <Card className="p-10 bg-white border border-slate-100 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-2xl bg-slate-100 animate-pulse" />
-                <div className="flex-1">
-                  <div className="h-4 w-1/3 rounded bg-slate-100 animate-pulse" />
-                  <div className="mt-2 h-3 w-1/2 rounded bg-slate-100 animate-pulse" />
+            <div className="space-y-4">
+              {[1, 2].map(i => (
+                <div key={i} className="rounded-2xl border border-slate-100 bg-white p-6 animate-pulse">
+                  <div className="flex gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-slate-100" />
+                    <div className="flex-1 space-y-2 pt-1">
+                      <div className="h-4 bg-slate-100 rounded-full w-1/3" />
+                      <div className="h-3 bg-slate-100 rounded-full w-1/2" />
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </Card>
-          ) : offersSorted.length === 0 ? (
-            <Card className="p-12 text-center bg-white border border-slate-100 shadow-sm">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100">
-                <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
+              ))}
+            </div>
+          ) : sortedOffers.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-16 flex flex-col items-center text-center">
+              <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center mb-5">
+                <svg className="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.073a2.25 2.25 0 0 1-2.25 2.25h-12a2.25 2.25 0 0 1-2.25-2.25V6a2.25 2.25 0 0 1 2.25-2.25h4.5" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 2.25v6m3-3h-6" />
                 </svg>
               </div>
-              <h3 className="mt-4 text-base font-semibold text-slate-900">No internships posted yet</h3>
-              <p className="mt-1 text-sm text-slate-600">Click “Post Internship” to get started.</p>
-              <div className="mt-6 flex justify-center">
-                <button
-                  onClick={() => {
-                    resetForm();
-                    setShowPostModal(true);
-                  }}
-                  className="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
-                >
-                  Post Internship
-                </button>
-              </div>
-            </Card>
+              <p className="text-base font-semibold text-slate-800">No internships posted yet</p>
+              <p className="text-sm text-slate-400 mt-1 max-w-xs">Start attracting top talent by publishing your first internship listing.</p>
+              <button
+                onClick={() => setShowPostModal(true)}
+                className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-all duration-150 shadow-sm shadow-indigo-200"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                Post your first internship
+              </button>
+            </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {offersSorted.map((offer) => {
-                const m = offerMetrics.get(offer?.id) ?? { count: 0, avg: null };
-                const avg = m.avg;
-                const applicantCount = m.count;
-                const skills = Array.isArray(offer?.required_skills) ? offer.required_skills : [];
-                const postedAt = offer?.created_at ?? offer?.posted_at ?? offer?.createdAt;
-
-                const avgScoreDisplay = avg == null ? "—" : `${Math.round(avg)}%`;
-                const isOpen = Boolean(openApplicants[offer.id]);
+            <div className="space-y-4">
+              {sortedOffers.map((offer) => {
+                const appList = groupedApps.get(offer.id) || [];
+                const avgMatch = appList.length
+                  ? appList.reduce((s, a) => s + clampScore(a.match_score), 0) / appList.length
+                  : 0;
+                const isOpen = !!openApplicants[offer.id];
 
                 return (
-                  <Card
+                  <div
                     key={offer.id}
-                    className="p-6 bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow"
+                    className="group rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-indigo-100 transition-all duration-200"
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="truncate text-base font-semibold text-slate-900">{offer.title}</h3>
-                          <StatusPill isActive={offer.is_active} />
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">
-                          <span className="inline-flex items-center gap-1">
-                            <svg className="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M12 21s7-4.35 7-11a7 7 0 0 0-14 0c0 6.65 7 11 7 11Z" strokeLinecap="round" strokeLinejoin="round" />
-                              <path d="M12 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            {offer.location || "—"}
-                          </span>
-                          <span className="inline-flex items-center gap-1">
-                            <svg className="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M8 7V3m8 4V3M4 11h16M6 21h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            Posted {formatDate(postedAt)}
-                          </span>
-                          <span className="inline-flex items-center gap-1">
-                            <svg className="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
-                              <path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            {offer.duration || "—"}
-                          </span>
-                        </div>
-                      </div>
+                    {/* Card Body */}
+                    <div className="p-6 space-y-5">
 
-                      <div className="flex items-center gap-3">
-                        <div className="text-right">
-                          <p className="text-xs font-medium text-slate-600">Avg match</p>
-                          <p className={`text-sm font-semibold ${avg == null ? "text-slate-400" : scoreColor(avg)}`}>
-                            {avgScoreDisplay}
-                          </p>
-                        </div>
-                        <MatchScoreRing score={avg ?? 0} size={46} stroke={6} showLabel={avg != null} />
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {skills.length === 0 ? (
-                        <span className="text-sm text-slate-500">No skills specified</span>
-                      ) : (
-                        skills.slice(0, 8).map((skill) => (
-                          <span
-                            key={skill}
-                            className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200"
-                          >
-                            {skill}
-                          </span>
-                        ))
-                      )}
-                      {skills.length > 8 ? (
-                        <span className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
-                          +{skills.length - 8} more
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                        <p className="text-xs font-medium text-slate-600">Applicants</p>
-                        <p className="mt-1 text-sm font-semibold text-slate-900">{applicantCount}</p>
-                      </div>
-                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                        <p className="text-xs font-medium text-slate-600">Average match</p>
-                        <p className={`mt-1 text-sm font-semibold ${avg == null ? "text-slate-400" : scoreColor(avg)}`}>
-                          {avgScoreDisplay}
-                        </p>
-                      </div>
-                      <div className="hidden sm:block rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                        <p className="text-xs font-medium text-slate-600">Status</p>
-                        <div className="mt-2">
-                          <StatusPill isActive={offer.is_active} />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-5 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
-                      <button
-                        onClick={() =>
-                          setOpenApplicants((prev) => ({
-                            ...prev,
-                            [offer.id]: !prev[offer.id],
-                          }))
-                        }
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
-                      >
-                        <svg
-                          className={`h-5 w-5 transition-transform ${isOpen ? "rotate-180" : ""}`}
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        View Applicants
-                      </button>
-
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleEditClick(offer)}
-                          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteOffer(offer.id)}
-                          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-
-                    <div
-                      className={`mt-4 overflow-hidden transition-[max-height,opacity] duration-300 ease-out ${isOpen ? "max-h-[1200px] opacity-100" : "max-h-0 opacity-0"
-                        }`}
-                    >
-                      <div className="pt-4 border-t border-slate-100">
-                        {loadingApps ? (
-                          <div className="py-8 flex items-center justify-center">
-                            <div className="h-7 w-7 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
+                      {/* Header */}
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-4">
+                          {/* Avatar - Modified to use Indigo gradient */}
+                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg flex-shrink-0 shadow-sm">
+                            {offer.title?.[0]?.toUpperCase() ?? "?"}
                           </div>
-                        ) : (appsByOfferId.get(offer.id) ?? []).length === 0 ? (
-                          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-6 text-center">
-                            <p className="text-sm font-semibold text-slate-900">No applicants yet</p>
-                            <p className="mt-1 text-sm text-slate-600">When students apply, they’ll show up here.</p>
+                          <div>
+                            <h3 className="text-lg font-bold text-slate-900 leading-tight">{offer.title}</h3>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-slate-400">
+                              <span className="flex items-center gap-1">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                                </svg>
+                                {offer.location || "Remote"}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+                                </svg>
+                                {formatDate(offer.created_at)}
+                              </span>
+                              {offer.duration && (
+                                <span className="flex items-center gap-1">
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                  </svg>
+                                  {offer.duration}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <StatusPill isActive={offer.is_active} />
+                      </div>
+
+                      {/* Skills */}
+                      {offer.required_skills?.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {offer.required_skills.slice(0, 6).map(skill => (
+                            <span
+                              key={skill}
+                              className="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-50 text-slate-600 ring-1 ring-slate-200/80"
+                            >
+                              {skill}
+                            </span>
+                          ))}
+                          {offer.required_skills.length > 6 && (
+                            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-500 ring-1 ring-indigo-100">
+                              +{offer.required_skills.length - 6} more
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Stats + Actions */}
+                      <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-100">
+                        <div className="flex items-center gap-5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center">
+                              <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+                              </svg>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-400 leading-none">Applicants</p>
+                              <p className="text-sm font-bold text-slate-900 mt-0.5">{appList.length}</p>
+                            </div>
+                          </div>
+                          <div className="w-px h-8 bg-slate-100" />
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center">
+                              <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+                              </svg>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-400 leading-none">Avg match</p>
+                              <p className={`text-sm font-bold mt-0.5 ${scoreColor(avgMatch)}`}>{Math.round(avgMatch)}%</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setOpenApplicants(prev => ({ ...prev, [offer.id]: !prev[offer.id] }))}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors duration-150"
+                          >
+                            <svg className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="m19 9-7 7-7-7" />
+                            </svg>
+                            {isOpen ? "Hide" : "Applicants"}
+                          </button>
+                          <button
+                            onClick={() => handleEditClick(offer)}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors duration-150"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+                            </svg>
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteOffer(offer.id)}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium bg-white border border-slate-200 text-rose-500 hover:bg-rose-50 hover:border-rose-200 transition-colors duration-150"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                            </svg>
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Applicants Panel */}
+                    {isOpen && (
+                      <div className="border-t border-slate-100 bg-slate-50 rounded-b-2xl px-6 py-5 space-y-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                            Applicants — sorted by match score
+                          </p>
+                          <span className="text-xs font-medium text-slate-400">{appList.length} total</span>
+                        </div>
+
+                        {loadingApps ? (
+                          <div className="py-10 text-center text-sm text-slate-400">Loading applicants...</div>
+                        ) : appList.length === 0 ? (
+                          <div className="py-10 text-center">
+                            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
+                              <svg className="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+                              </svg>
+                            </div>
+                            <p className="text-sm text-slate-400">No applicants yet</p>
                           </div>
                         ) : (
-                          <div className="space-y-3">
-                            {(appsByOfferId.get(offer.id) ?? []).map((app) => {
-                              const s = clampScore(app?.match_score);
-                              const skills2 = getApplicantSkills(app);
-
-                              return (
-                                <div
-                                  key={app.id}
-                                  className="rounded-2xl border border-slate-200 bg-white px-4 py-4 hover:shadow-sm transition-shadow"
-                                >
-                                  <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                      <div className="h-11 w-11 rounded-2xl bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100 grid place-items-center font-semibold">
-                                        {initials(app?.student_name)}
-                                      </div>
-                                      <div className="min-w-0">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                          <p className="truncate text-sm font-semibold text-slate-900">
-                                            {app?.student_name ?? "Unnamed applicant"}
-                                          </p>
-                                          <ApplicationStatusBadge status={app?.status} />
-                                        </div>
-                                        <p className="mt-1 text-xs text-slate-600">
-                                          Applied {formatDate(app?.applied_at ?? app?.created_at ?? app?.appliedAt)}
-                                        </p>
-                                      </div>
-                                    </div>
-
-                                    <div className="flex items-center justify-between sm:justify-end gap-4">
-                                      <div className="flex items-center gap-3">
-                                        <div className="text-right">
-                                          <p className="text-xs font-medium text-slate-600">Match score</p>
-                                          <p className={`text-sm font-semibold ${scoreColor(s)}`}>{Math.round(s)}%</p>
-                                        </div>
-                                        <MatchScoreRing score={s} size={48} stroke={6} />
-                                      </div>
-
-                                      {app?.status === "pending" ? (
-                                        <div className="flex gap-2">
-                                          <button
-                                            onClick={() => handleUpdateApplicationStatus(app.id, "accepted")}
-                                            disabled={updatingApplicationId === app.id}
-                                            className="rounded-2xl bg-emerald-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors disabled:opacity-60"
-                                          >
-                                            Accept
-                                          </button>
-                                          <button
-                                            onClick={() => handleUpdateApplicationStatus(app.id, "rejected")}
-                                            disabled={updatingApplicationId === app.id}
-                                            className="rounded-2xl bg-red-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-red-700 transition-colors disabled:opacity-60"
-                                          >
-                                            Reject
-                                          </button>
-                                        </div>
-                                      ) : null}
-                                    </div>
+                          <div className="space-y-2">
+                            {appList.map((app, idx) => (
+                              <div
+                                key={app.id}
+                                className="bg-white rounded-xl border border-slate-100 px-4 py-3.5 flex flex-wrap items-center justify-between gap-4 hover:border-slate-200 transition-colors duration-150"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <span className="text-xs font-bold text-slate-300 w-4 text-center">{idx + 1}</span>
+                                  {/* Modified avatar: pure Indigo gradient */}
+                                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                                    {initials(app.student_name)}
                                   </div>
-
-                                  <div className="mt-3 flex flex-wrap gap-2">
-                                    {skills2.length === 0 ? (
-                                      <span className="text-xs text-slate-500">No skills listed</span>
-                                    ) : (
-                                      skills2.slice(0, 10).map((sk) => (
-                                        <span
-                                          key={sk}
-                                          className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200"
-                                        >
-                                          {sk}
-                                        </span>
-                                      ))
-                                    )}
-                                    {skills2.length > 10 ? (
-                                      <span className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
-                                        +{skills2.length - 10} more
-                                      </span>
-                                    ) : null}
+                                  <div>
+                                    <p className="text-sm font-semibold text-slate-900 leading-tight">{app.student_name || "Anonymous"}</p>
+                                    <p className="text-xs text-slate-400 mt-0.5">Applied {formatDate(app.applied_at)}</p>
                                   </div>
                                 </div>
-                              );
-                            })}
+
+                                <div className="flex items-center gap-3 flex-wrap">
+                                  <MatchScoreRing score={app.match_score} size={40} />
+                                  <ApplicationStatusBadge status={app.status} />
+                                  {app.status === "pending" && (
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleUpdateStatus(app.id, "accepted")}
+                                        disabled={updatingAppId === app.id}
+                                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors duration-150 shadow-sm"
+                                      >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                                        </svg>
+                                        Accept
+                                      </button>
+                                      <button
+                                        onClick={() => handleUpdateStatus(app.id, "rejected")}
+                                        disabled={updatingAppId === app.id}
+                                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-white border border-rose-200 text-rose-600 rounded-lg text-xs font-semibold hover:bg-rose-50 disabled:opacity-50 transition-colors duration-150"
+                                      >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                        </svg>
+                                        Reject
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         )}
-
-                        {!loadingApps && (appsByOfferId.get(offer.id) ?? []).length > 1 ? (
-                          <p className="mt-3 text-xs text-slate-500">
-                            Applicants are sorted by match score (highest first).
-                          </p>
-                        ) : null}
                       </div>
-                    </div>
-                  </Card>
+                    )}
+                  </div>
                 );
               })}
             </div>
           )}
         </div>
 
-        {/* Applicants summary */}
-        <div className="space-y-4">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">Applicants</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Collapsible per internship above. Here’s a quick overview.
-              </p>
-            </div>
-            <a href="/company/Candidates" className="text-sm font-semibold text-indigo-600 hover:text-indigo-700">
-              View all →
-            </a>
-          </div>
-
-          <Card className="p-6 bg-white border border-slate-100 shadow-sm">
-            {loadingApps ? (
-              <div className="flex items-center justify-center py-10">
-                <div className="h-8 w-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
-              </div>
-            ) : applications.length === 0 ? (
-              <div className="text-center py-10">
-                <h3 className="text-base font-semibold text-slate-900">No applications yet</h3>
-                <p className="mt-1 text-sm text-slate-600">When students apply to your internships, they’ll appear here.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <p className="text-xs font-medium text-slate-600">Highest match score</p>
-                  {(() => {
-                    const best = [...applications].sort(
-                      (a, b) => clampScore(b?.match_score) - clampScore(a?.match_score)
-                    )[0];
-                    const bestScore = clampScore(best?.match_score);
-                    return (
-                      <div className="mt-3 flex items-center justify-between gap-4">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-slate-900">{best?.student_name ?? "—"}</p>
-                          <p className="mt-1 text-xs text-slate-600">{best?.offer_title ?? "—"}</p>
-                        </div>
-                        <MatchScoreRing score={bestScore} size={46} stroke={6} />
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <p className="text-xs font-medium text-slate-600">Average match score</p>
-                  <div className="mt-3 flex items-center gap-3">
-                    <MatchScoreRing
-                      score={overallAverageMatch ?? 0}
-                      size={46}
-                      stroke={6}
-                      showLabel={overallAverageMatch != null}
-                    />
-                    <div>
-                      <p className={`text-sm font-semibold ${overallAverageMatch == null ? "text-slate-400" : scoreColor(overallAverageMatch)}`}>
-                        {overallAverageMatch == null ? "—" : `${Math.round(overallAverageMatch)}%`}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-600">Across {applications.length} applicants</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <p className="text-xs font-medium text-slate-600">Pending decisions</p>
-                  <div className="mt-3 flex items-center justify-between">
-                    <p className="text-2xl font-semibold text-slate-900">{pendingApplications}</p>
-                    <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 ring-1 ring-indigo-100">
-                      Action needed
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </Card>
-        </div>
-
-        {/* Post Modal */}
-        <Modal
-          isOpen={showPostModal}
-          onClose={() => {
-            setShowPostModal(false);
-            resetForm();
-          }}
-          title="📢 Post New Internship"
-          submitText="Post Internship"
-        >
-          <form onSubmit={handleSubmitOffer} className="space-y-5">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Position Title *</label>
-              <input
-                type="text"
-                name="title"
-                value={formData.title}
-                onChange={handleInputChange}
-                required
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
-                placeholder="e.g., Frontend Developer Intern"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Description *</label>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                required
-                rows="4"
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
-                placeholder="Describe the internship responsibilities and requirements..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Required Skills</label>
-              <input
-                type="text"
-                name="required_skills"
-                value={formData.required_skills}
-                onChange={handleInputChange}
-                placeholder="React, Python, Flask, SQL (comma separated)"
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
-              />
-              <p className="text-xs text-slate-400 mt-1">Separate skills with commas</p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Location (Wilaya)</label>
-                <select
-                  name="location"
-                  value={formData.location}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
-                >
-                  <option value="">Select a Wilaya</option>
-                  <option value="Algiers">Algiers</option>
-                  <option value="Oran">Oran</option>
-                  <option value="Constantine">Constantine</option>
-                  <option value="Annaba">Annaba</option>
-                  <option value="Blida">Blida</option>
-                  <option value="Setif">Setif</option>
-                  <option value="Tizi Ouzou">Tizi Ouzou</option>
-                  <option value="Bejaia">Bejaia</option>
-                  <option value="Biskra">Biskra</option>
-                  <option value="Tlemcen">Tlemcen</option>
-                </select>
-                <p className="text-xs text-slate-400 mt-1">Select the location for this internship</p>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Duration</label>
-                <input
-                  type="text"
-                  name="duration"
-                  value={formData.duration}
-                  onChange={handleInputChange}
-                  placeholder="3 months, 6 months"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3 pt-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowPostModal(false);
-                  resetForm();
-                }}
-                className="flex-1 px-4 py-3 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="flex-1 px-4 py-3 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50"
-              >
-                {submitting ? "Posting..." : "Post Internship"}
-              </button>
-            </div>
-          </form>
-        </Modal>
-
-        {/* Edit Modal */}
-        <Modal
-          isOpen={showEditModal}
-          onClose={() => {
-            setShowEditModal(false);
-            resetForm();
-          }}
-          title="✏️ Edit Internship"
-          submitText="Save Changes"
-        >
-          <form onSubmit={handleUpdateOffer} className="space-y-5">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Position Title *</label>
-              <input
-                type="text"
-                name="title"
-                value={formData.title}
-                onChange={handleInputChange}
-                required
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
-                placeholder="e.g., Frontend Developer Intern"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Description *</label>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                required
-                rows="4"
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
-                placeholder="Describe the internship responsibilities and requirements..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Required Skills</label>
-              <input
-                type="text"
-                name="required_skills"
-                value={formData.required_skills}
-                onChange={handleInputChange}
-                placeholder="React, Python, Flask, SQL (comma separated)"
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
-              />
-              <p className="text-xs text-slate-400 mt-1">Separate skills with commas</p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Location (Wilaya)</label>
-                <select
-                  name="location"
-                  value={formData.location}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
-                >
-                  <option value="">Select a Wilaya</option>
-                  <option value="Algiers">Algiers</option>
-                  <option value="Oran">Oran</option>
-                  <option value="Constantine">Constantine</option>
-                  <option value="Annaba">Annaba</option>
-                  <option value="Blida">Blida</option>
-                  <option value="Setif">Setif</option>
-                  <option value="Tizi Ouzou">Tizi Ouzou</option>
-                  <option value="Bejaia">Bejaia</option>
-                  <option value="Biskra">Biskra</option>
-                  <option value="Tlemcen">Tlemcen</option>
-                </select>
-                <p className="text-xs text-slate-400 mt-1">Select the location for this internship</p>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Duration</label>
-                <input
-                  type="text"
-                  name="duration"
-                  value={formData.duration}
-                  onChange={handleInputChange}
-                  placeholder="3 months, 6 months"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3 pt-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowEditModal(false);
-                  resetForm();
-                }}
-                className="flex-1 px-4 py-3 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="flex-1 px-4 py-3 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50"
-              >
-                {submitting ? "Saving..." : "Save Changes"}
-              </button>
-            </div>
-          </form>
-        </Modal>
       </div>
+
+      {/* Post Modal */}
+      <Modal
+        isOpen={showPostModal}
+        onClose={() => {
+          setShowPostModal(false);
+          resetForm();
+        }}
+        title="📢 Post New Internship"
+        submitText="Post Internship"
+      >
+        <form onSubmit={handleSubmitOffer} className="space-y-5">
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Position Title *</label>
+            <input
+              type="text"
+              name="title"
+              value={formData.title}
+              onChange={handleInputChange}
+              required
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
+              placeholder="e.g., Frontend Developer Intern"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Description *</label>
+            <textarea
+              name="description"
+              value={formData.description}
+              onChange={handleInputChange}
+              required
+              rows="4"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
+              placeholder="Describe the internship responsibilities and requirements..."
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Required Skills</label>
+            <input
+              type="text"
+              name="required_skills"
+              value={formData.required_skills}
+              onChange={handleInputChange}
+              placeholder="React, Python, Flask, SQL (comma separated)"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
+            />
+            <p className="text-xs text-slate-400 mt-1">Separate skills with commas</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Location (Wilaya)</label>
+              <select
+                name="location"
+                value={formData.location}
+                onChange={handleInputChange}
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
+              >
+                <option value="">Select a Wilaya</option>
+                <option value="Algiers">Algiers</option>
+                <option value="Oran">Oran</option>
+                <option value="Constantine">Constantine</option>
+                <option value="Annaba">Annaba</option>
+                <option value="Blida">Blida</option>
+                <option value="Setif">Setif</option>
+                <option value="Tizi Ouzou">Tizi Ouzou</option>
+                <option value="Bejaia">Bejaia</option>
+                <option value="Biskra">Biskra</option>
+                <option value="Tlemcen">Tlemcen</option>
+              </select>
+              <p className="text-xs text-slate-400 mt-1">Select the location for this internship</p>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Duration</label>
+              <input
+                type="text"
+                name="duration"
+                value={formData.duration}
+                onChange={handleInputChange}
+                placeholder="3 months, 6 months"
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={() => {
+                setShowPostModal(false);
+                resetForm();
+              }}
+              className="flex-1 px-4 py-3 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex-1 px-4 py-3 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50"
+            >
+              {submitting ? "Posting..." : "Post Internship"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Modal */}
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          resetForm();
+        }}
+        title="✏️ Edit Internship"
+        submitText="Save Changes"
+      >
+        <form onSubmit={handleUpdateOffer} className="space-y-5">
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Position Title *</label>
+            <input
+              type="text"
+              name="title"
+              value={formData.title}
+              onChange={handleInputChange}
+              required
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
+              placeholder="e.g., Frontend Developer Intern"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Description *</label>
+            <textarea
+              name="description"
+              value={formData.description}
+              onChange={handleInputChange}
+              required
+              rows="4"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
+              placeholder="Describe the internship responsibilities and requirements..."
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Required Skills</label>
+            <input
+              type="text"
+              name="required_skills"
+              value={formData.required_skills}
+              onChange={handleInputChange}
+              placeholder="React, Python, Flask, SQL (comma separated)"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
+            />
+            <p className="text-xs text-slate-400 mt-1">Separate skills with commas</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Location (Wilaya)</label>
+              <select
+                name="location"
+                value={formData.location}
+                onChange={handleInputChange}
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
+              >
+                <option value="">Select a Wilaya</option>
+                <option value="Algiers">Algiers</option>
+                <option value="Oran">Oran</option>
+                <option value="Constantine">Constantine</option>
+                <option value="Annaba">Annaba</option>
+                <option value="Blida">Blida</option>
+                <option value="Setif">Setif</option>
+                <option value="Tizi Ouzou">Tizi Ouzou</option>
+                <option value="Bejaia">Bejaia</option>
+                <option value="Biskra">Biskra</option>
+                <option value="Tlemcen">Tlemcen</option>
+              </select>
+              <p className="text-xs text-slate-400 mt-1">Select the location for this internship</p>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Duration</label>
+              <input
+                type="text"
+                name="duration"
+                value={formData.duration}
+                onChange={handleInputChange}
+                placeholder="3 months, 6 months"
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none bg-white"
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={() => {
+                setShowEditModal(false);
+                resetForm();
+              }}
+              className="flex-1 px-4 py-3 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex-1 px-4 py-3 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50"
+            >
+              {submitting ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
